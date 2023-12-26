@@ -2,6 +2,8 @@ from AlgoAPI import AlgoAPIUtil, AlgoAPI_Backtest
 from datetime import datetime, timedelta
 import talib, numpy
 
+#todo: learn divergence, know more about the rules of the contest
+
 class AlgoEvent:
     def __init__(self):
         self.lasttradetime = datetime(2000,1,1)
@@ -48,25 +50,31 @@ class AlgoEvent:
             upper_bband = sma + 2*sd
             lower_bband = sma - 2*sd
             
-            # caclulate the rsi
-            rsi = self.find_rsi(self.arr_close, self.rsi_len)
-            self.evt.consoleLog(f"rsi: {rsi}")
-            
             # debug print result
             self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
             self.evt.consoleLog(f"sma: {sma}")
             self.evt.consoleLog(f"upper: {upper_bband}")
             self.evt.consoleLog(f"lower: {lower_bband}")
             
-            # check if the price crosses the upper bband (sell signal)
+            # check for sell signal (price crosses upper bband and rsi > 70)
             if lastprice >= upper_bband:
-                self.test_sendOrder(lastprice, -1, 'open')
-                self.evt.consoleLog(f"sell")
+                # caclulate the rsi
+                rsi = self.find_rsi(self.arr_close, self.rsi_len)
+                self.evt.consoleLog(f"rsi: {rsi}")
+                # check for rsi
+                if rsi > 70:
+                    self.test_sendOrder(lastprice, -1, 'open')
+                    self.evt.consoleLog(f"sell")
             
-            # check if the price crosses the lower bband (buy signal)
+            # check for buy signal (price crosses lower bband and rsi < 30)
             if lastprice <= lower_bband:
-                self.test_sendOrder(lastprice, 1, "open")
-                self.evt.consoleLog(f"buy")
+                # caclulate the rsi
+                rsi = self.find_rsi(self.arr_close, self.rsi_len)
+                self.evt.consoleLog(f"rsi: {rsi}")
+                # check for rsi
+                if rsi < 30:
+                    self.test_sendOrder(lastprice, 1, "open")
+                    self.evt.consoleLog(f"buy")
                 
             
             """
