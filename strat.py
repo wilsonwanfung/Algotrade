@@ -63,7 +63,7 @@ class AlgoEvent:
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
                 if rsi > 70:
-                    self.test_sendOrder(lastprice, -1, 'open')
+                    self.test_sendOrder(lastprice, -1, 'open', find)
                     self.evt.consoleLog(f"sell")
             
             # check for buy signal (price crosses lower bband and rsi < 30)
@@ -82,10 +82,10 @@ class AlgoEvent:
             if not numpy.isnan(self.arr_fastMA[-1]) and not numpy.isnan(self.arr_fastMA[-2]) and not numpy.isnan(self.arr_slowMA[-1]) and not numpy.isnan(self.arr_slowMA[-2]):
                 # send a buy order for Golden Cross
                 if self.arr_fastMA[-1] > self.arr_slowMA[-1] and self.arr_fastMA[-2] < self.arr_slowMA[-2]:
-                    self.test_sendOrder(lastprice, 1, 'open')
+                    self.test_sendOrder(lastprice, 1, 'open', find_positionSize(lastprice))
                 # send a sell order for Death Cross
                 if self.arr_fastMA[-1] < self.arr_slowMA[-1] and self.arr_fastMA[-2] > self.arr_slowMA[-2]:
-                    self.test_sendOrder(lastprice, -1, 'open')
+                    self.test_sendOrder(lastprice, -1, 'open', find_positionSize(lastprice))
             """
             
             
@@ -119,7 +119,7 @@ class AlgoEvent:
         return rsi
         
         
-    def test_sendOrder(self, lastprice, buysell, openclose):
+    def test_sendOrder(self, lastprice, buysell, openclose, volume = 10):
         order = AlgoAPIUtil.OrderObject()
         order.instrument = self.myinstrument
         order.orderRef = 1
@@ -129,8 +129,25 @@ class AlgoEvent:
         elif buysell==-1:
             order.takeProfitLevel = lastprice*0.9
             order.stopLossLevel = lastprice*1.1
-        order.volume = 10
+        order.volume = volume
         order.openclose = openclose
         order.buysell = buysell
         order.ordertype = 0 #0=market_order, 1=limit_order, 2=stop_order
         self.evt.sendOrder(order)
+
+     # utility function to find volume based on available balance
+    def find_positionSize(self, lastprice):
+        res = self.evt.getAccountBalance()
+        availableBalance = res["availableBalance"]
+        ratio = 0.3
+        volume = (availableBalance*ratio) / lastprice
+        total =  availableBalance*ratio
+        while total < 0.3 * availableBalance:
+            ratio *= 1.05
+            volume = (availableBalance*ratio) / lastprice
+            total = availableBalance*ratio
+        while total > availableBalance:
+            ratio *= 0.95
+            volume = (availableBalance*ratio) / lastprice
+            total = availableBalance*ratio
+        return volume
