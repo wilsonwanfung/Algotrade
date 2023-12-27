@@ -63,7 +63,7 @@ class AlgoEvent:
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
                 if rsi > 70:
-                    self.test_sendOrder(lastprice, -1, 'open', find)
+                    self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice))
                     self.evt.consoleLog(f"sell")
             
             # check for buy signal (price crosses lower bband and rsi < 30)
@@ -73,7 +73,7 @@ class AlgoEvent:
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
                 if rsi < 30:
-                    self.test_sendOrder(lastprice, 1, "open")
+                    self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice))
                     self.evt.consoleLog(f"buy")
                 
             
