@@ -62,7 +62,7 @@ class AlgoEvent:
                 rsi = self.find_rsi(self.arr_close, self.rsi_len)
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
-                if rsi > 70:
+                if rsi > 60:
                     self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice))
                     self.evt.consoleLog(f"sell")
             
@@ -72,7 +72,7 @@ class AlgoEvent:
                 rsi = self.find_rsi(self.arr_close, self.rsi_len)
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
-                if rsi < 30:
+                if rsi < 40:
                     self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice))
                     self.evt.consoleLog(f"buy")
                 
@@ -150,4 +150,4 @@ class AlgoEvent:
             ratio *= 0.95
             volume = (availableBalance*ratio) / lastprice
             total = availableBalance*ratio
-        return volume
+        return volume*1000
