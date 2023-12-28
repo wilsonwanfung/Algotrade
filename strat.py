@@ -10,8 +10,8 @@ class AlgoEvent:
         self.start_time = None # the starting time of the trading
         self.arr_close = numpy.array([])
             #self.arr_open = numpy.array([])
-        self.ma_len = 20
-        self.rsi_len = 14
+        self.ma_len = 20 # len of arrays of Moving Average
+        self.rsi_len = 14 # len of window size in rsi calculation
         self.wait_time = self.ma_len # in days
         self.arr_bbw = numpy.array([])
         self.bbw_len = 1*30 # length of bbw, only set to 30 as too high will yield no sequeeze, may change
@@ -22,41 +22,42 @@ class AlgoEvent:
         self.evt.start()
 
     def on_bulkdatafeed(self, isSync, bd, ab):
-        # set start time on the first call of this function
+        # set start time and arr_close(s) of all instruct. in bd on the first call of this function
         if not self.start_time:
             self.start_time = bd[self.myinstrument]['timestamp']
+            for key in bd:
+                bd[key]["arr_close"] = numpy.array([])
         
         # check if it is decision time
         if bd[self.myinstrument]['timestamp'] >= self.lasttradetime + timedelta(hours=24):
-            # update arr_close and arr_open
+            # update arr_close(s)
             self.lasttradetime = bd[self.myinstrument]['timestamp']
-            lastprice = bd[self.myinstrument]['lastPrice']
-                #open_price = bd[self.myinstrument]['openPrice']
-            self.arr_close = numpy.append(self.arr_close, lastprice)
-                #self.arr_open = numpy.append(self.arr_open, open_price)
-            # keep the most recent observations for arr_close (record of close prices)
-            if len(self.arr_close)>self.ma_len:
-                self.arr_close = self.arr_close[-self.ma_len:]
-            """
-            # keep the most recent observations for arr_open (record of open prices)
-            if len(self.arr_open)>self.ma_len:
-                self.arr_open = self.arr_open[-self.ma_len:]"""
+            for key in bd:
+                lastprice = bd[key]['lastPrice']
+                bd[key]["arr_close"] = numpy.append(bd[key]["arr_close"], lastprice)
+            
+                # keep the most recent observations for arr_close (record of close prices)
+                bd[key]["arr_close"] = bd[key]["arr_close"])[-self.ma_len::]
             
             # check if we have waited the initial peroid
             if bd[self.myinstrument]['timestamp'] <= self.start_time + timedelta(days = self.wait_time):
                 return
             
-            # find SMA, upper bband and lower bband, and bbw
-            sma = self.find_sma(self.arr_close, self.ma_len)
-            sd = numpy.std(self.arr_close[-self.ma_len::])
-            upper_bband = sma + 2*sd
-            lower_bband = sma - 2*sd
-            bbw = (upper_bband-lower_bband)/sma
+            # find SMA, upper bband and lower bband, and bbw for the key
+            for key in bd:
+                sma = self.find_sma(bd[key][arr_close], self.ma_len)
+                sd = numpy.std(bd[key][arr_close])
+                upper_bband = sma + 2*sd
+                lower_bband = sma - 2*sd
+                bbw = (upper_bband-lower_bband)/sma
+            
+            
             
             #update bbw arr and determine if bollinger sequeeze
             self.arr_bbw = numpy.append(self.arr_bbw, bbw)
             self.arr_bbw = self.arr_bbw[-self.bbw_len::]
-            is_sequeeze = self.is_sequeeze(self.arr_bbw)
+            #is_sequeeze = self.is_sequeeze(self.arr_bbw)
+            is_sequeeze = False
             
             # debug print result
             self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
@@ -64,7 +65,7 @@ class AlgoEvent:
             self.evt.consoleLog(f"upper: {upper_bband}")
             self.evt.consoleLog(f"lower: {lower_bband}")
             self.evt.consoleLog(f"bbw: {bbw}")
-            self.evt.consoleLog(f"is squeeze?: {is_sequeeze}")
+            #self.evt.consoleLog(f"is squeeze?: {is_sequeeze}")
             
             # check for sell signal (price crosses upper bband and rsi > 70)
             if lastprice >= upper_bband:
@@ -111,9 +112,39 @@ class AlgoEvent:
     def on_openPositionfeed(self, op, oo, uo):
         pass
     
+    
     def find_sma(self, data, window_size):
         return data[-window_size::].sum()/window_size
+
+    # execute the trading strat for one instructment given the key and bd       
+    def execute_strat(self, bd, key):
+        # find sma, sd, 2 bbands, and bbw
+        sma = self.find_sma(bd[key][arr_close], self.ma_len)
+        sd = numpy.std(bd[key][arr_close])
+        upper_bband = sma + 2*sd
+        lower_bband = sma - 2*sd
+        bbw = (upper_bband-lower_bband)/sma
         
+        # debug
+        self.evt.consoleLog(f"name of instrument: {bd[key]["instrument]}")
+        self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
+        self.evt.consoleLog(f"sma: {sma}")
+        self.evt.consoleLog(f"upper: {upper_bband}")
+        self.evt.consoleLog(f"lower: {lower_bband}")
+        self.evt.consoleLog(f"bbw: {bbw}")
+        
+        # check for sell signal (price crosses upper bband and rsi > 70)
+    
+        if lastprice >= upper_bband:
+            # caclulate the rsi
+            rsi = self.find_rsi(self.arr_close, self.rsi_len)
+            self.evt.consoleLog(f"rsi: {rsi}")
+            # check for rsi
+            if rsi > 60:
+                self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice, is_sequeeze))
+                self.evt.consoleLog(f"sell")
+        
+    
     # determine if there is bollinger squeeze
     def is_sequeeze(self, arr_bbw):
         if len(arr_bbw) < self.bbw_len:
