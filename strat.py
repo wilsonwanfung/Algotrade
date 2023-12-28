@@ -13,6 +13,8 @@ class AlgoEvent:
         self.ma_len = 20
         self.rsi_len = 14
         self.wait_time = self.ma_len # in days
+        self.arr_bbw = numpy.array([])
+        self.bbw_len = 1*30 # length of bbw, only set to 30 as too high will yield no sequeeze, may change
 
     def start(self, mEvt):
         self.myinstrument = mEvt['subscribeList'][0]
@@ -44,17 +46,25 @@ class AlgoEvent:
             if bd[self.myinstrument]['timestamp'] <= self.start_time + timedelta(days = self.wait_time):
                 return
             
-            # find SMA, upper bband and lower bband
+            # find SMA, upper bband and lower bband, and bbw
             sma = self.find_sma(self.arr_close, self.ma_len)
             sd = numpy.std(self.arr_close[-self.ma_len::])
             upper_bband = sma + 2*sd
             lower_bband = sma - 2*sd
+            bbw = (upper_bband-lower_bband)/sma
+            
+            #update bbw arr and determine if bollinger sequeeze
+            self.arr_bbw = numpy.append(self.arr_bbw, bbw)
+            self.arr_bbw = self.arr_bbw[-self.bbw_len::]
+            is_sequeeze = self.is_sequeeze(self.arr_bbw)
             
             # debug print result
             self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
             self.evt.consoleLog(f"sma: {sma}")
             self.evt.consoleLog(f"upper: {upper_bband}")
             self.evt.consoleLog(f"lower: {lower_bband}")
+            self.evt.consoleLog(f"bbw: {bbw}")
+            self.evt.consoleLog(f"is squeeze?: {is_sequeeze}")
             
             # check for sell signal (price crosses upper bband and rsi > 70)
             if lastprice >= upper_bband:
@@ -63,7 +73,7 @@ class AlgoEvent:
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
                 if rsi > 60:
-                    self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice))
+                    self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice, is_sequeeze))
                     self.evt.consoleLog(f"sell")
             
             # check for buy signal (price crosses lower bband and rsi < 30)
@@ -73,7 +83,7 @@ class AlgoEvent:
                 self.evt.consoleLog(f"rsi: {rsi}")
                 # check for rsi
                 if rsi < 40:
-                    self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice))
+                    self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice, is_sequeeze))
                     self.evt.consoleLog(f"buy")
                 
             
@@ -104,6 +114,12 @@ class AlgoEvent:
     def find_sma(self, data, window_size):
         return data[-window_size::].sum()/window_size
         
+    # determine if there is bollinger squeeze
+    def is_sequeeze(self, arr_bbw):
+        if len(arr_bbw) < self.bbw_len:
+            return False
+        return arr_bbw[-1] == arr_bbw.min()
+    
     def find_rsi(self, arr_close, window_size):
         # we use previous day's close price as today's open price, which is not entirely accurate
         deltas = numpy.diff(arr_close)
@@ -136,7 +152,7 @@ class AlgoEvent:
         self.evt.sendOrder(order)
 
      # utility function to find volume based on available balance
-    def find_positionSize(self, lastprice):
+    def find_positionSize(self, lastprice, is_sequeeze):
         res = self.evt.getAccountBalance()
         availableBalance = res["availableBalance"]
         ratio = 0.3
@@ -150,4 +166,6 @@ class AlgoEvent:
             ratio *= 0.95
             volume = (availableBalance*ratio) / lastprice
             total = availableBalance*ratio
+        if is_sequeeze:
+            volume *= 5
         return volume*1000
