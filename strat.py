@@ -19,11 +19,19 @@ class AlgoEvent:
         self.fastperiod = 5 #??
         self.midperiod = 8 #??
         self.slowperiod = 13 #??
+        
+        # for volume utility function
+        self.allocationratio_per_trade = 0.3
+        self.risk_limit_portfolio = 0.2
+        self.cooldown = 15
+        self.openOrder = {}
+        self.netOrder = {}
 
 
     def start(self, mEvt):
         self.myinstrument = mEvt['subscribeList'][0]
         self.evt = AlgoAPI_Backtest.AlgoEvtHandler(self, mEvt)
+        self.evt.update_portfolio_sl(sl=self.risk_limit_portfolio, resume_after=60*60*24*self.cooldown) # cool down maybe, idk
         self.evt.start()
 
 
@@ -88,7 +96,8 @@ class AlgoEvent:
         pass
 
     def on_openPositionfeed(self, op, oo, uo):
-        pass
+        self.openOrder = oo
+        self.netOrder = op
     
     
     def find_sma(self, data, window_size):
@@ -108,7 +117,7 @@ class AlgoEvent:
     # execute the trading strat for one instructment given the key and bd       
     def execute_strat(self, bd, key):
         self.evt.consoleLog("---------------------------------")
-        self.evt.consoleLog("Executing strat")
+        self.evt.consoleLog(f"Executing strat for instrument {bd[key]['instrument']}")
 
         # find sma, sd, 2 bbands, bbw, and lastprice
         inst = self.inst_data[key]
@@ -154,7 +163,6 @@ class AlgoEvent:
         #is_sequeeze = self.is_sequeeze(self.arr_bbw)
         
         # debug
-        self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
         #self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
         #self.evt.consoleLog(f"sma: {sma}")
         #self.evt.consoleLog(f"upper: {upper_bband}")
@@ -162,13 +170,12 @@ class AlgoEvent:
         #self.evt.consoleLog(f"bbw: {bbw}")
         
         # check for sell signal (price crosses upper bband and rsi > 70)
-        
-        if lastprice >= upper_bband and rsiGeneral[-1] > 60:
+        if lastprice >= upper_bband and rsiGeneral[-1] > 70:
             self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice, is_sequeeze))
             self.evt.consoleLog(f"SELL SELL SELL SELL")
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
-        if lastprice <= lower_bband and rsiGeneral[-1] < 40:
+        if lastprice <= lower_bband and rsiGeneral[-1] < 30:
             self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice, is_sequeeze))
             self.evt.consoleLog(f"BUY BUY BUY BUY")
                 
@@ -220,21 +227,20 @@ class AlgoEvent:
         order.ordertype = 0 #0=market_order, 1=limit_order, 2=stop_order
         self.evt.sendOrder(order)
 
+
     # utility function to find volume based on available balance
     def find_positionSize(self, lastprice, is_sequeeze):
         res = self.evt.getAccountBalance()
         availableBalance = res["availableBalance"]
-        ratio = 0.3
+        ratio = self.allocationratio_per_trade
         volume = (availableBalance*ratio) / lastprice
-        total =  availableBalance*ratio
-        while total < 0.3 * availableBalance:
+        total =  volume *  lastprice
+        while total < self.allocationratio_per_trade * availableBalance:
             ratio *= 1.05
             volume = (availableBalance*ratio) / lastprice
-            total = availableBalance*ratio
+            total =  volume *  lastprice
         while total > availableBalance:
             ratio *= 0.95
             volume = (availableBalance*ratio) / lastprice
-            total = availableBalance*ratio
-        if is_sequeeze:
-            volume *= 5
-        return volume*1000
+            total =  volume *  lastprice
+        return volume
