@@ -151,11 +151,11 @@ class AlgoEvent:
         
         # check for sell signal (price crosses upper bband and rsi > 70)
         if lastprice >= upper_bband and rsiGeneral[-1] > 70:
-            return 1
+            return -1
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
         if lastprice <= lower_bband and rsiGeneral[-1] < 30:
-            return -1
+            return 1
       
         
     # execute the trading strat for one instructment given the key and bd       
