@@ -23,7 +23,9 @@ class AlgoEvent:
         self.risk_reward_ratio = 2 # take profit level : risk_reward_ratio * stoploss
         self.stoploss_atrlen = 2 # width of atr for stoplsos
         self.allocationratio_per_trade = 0.3
- 
+        
+        self.openOrder = {} # existing open position for updating stoploss and checking direction
+        self.netOrder = {} # existing net order
 
     def start(self, mEvt):
         self.myinstrument = mEvt['subscribeList'][0]
@@ -65,6 +67,9 @@ class AlgoEvent:
                 inst_data['low_price'] = inst_data['low_price'][-time_period::]
                 
                 inst_data['atr'] = talib.ATR(inst_data['high_price'], inst_data['low_price'], inst_data['arr_close'], timeperiod = self.general_period)
+                stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
+                if key in self.openOrder:
+                    self.update_stoploss(key, stoploss)
                 
             # check if we have waited the initial peroid
             if bd[self.myinstrument]['timestamp'] <= self.start_time + timedelta(days = self.wait_time):
@@ -85,7 +90,8 @@ class AlgoEvent:
         pass
 
     def on_openPositionfeed(self, op, oo, uo):
-        pass
+        self.openOrder = oo
+        self.netOrder = op
     
     
     def find_sma(self, data, window_size):
@@ -162,7 +168,7 @@ class AlgoEvent:
             # rsi = talib.RSI(inst["arr_close"], self.general_period) don't need this, same as rsigeneral
             # check for rsi
             if rsiGeneral[-1] > 70:
-                self.test_sendOrder(lastprice, -1, 'open', stoploss, self.find_positionSize(lastprice), inst['instrument'])
+                self.test_sendOrder(lastprice, -1, 'open', stoploss, self.find_positionSize(lastprice),  bd[key]['instrument'] )
                 self.evt.consoleLog(f"SELL SELL SELL SELL")
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
@@ -173,7 +179,7 @@ class AlgoEvent:
             #rsi = talib.RSI(inst["arr_close"], self.general_period)
             # check for rsi
             if rsiGeneral[-1] < 30:
-                self.test_sendOrder(lastprice, 1, "open", stoploss, self.find_positionSize(lastprice), inst['instrument'])
+                self.test_sendOrder(lastprice, 1, "open", stoploss, self.find_positionSize(lastprice),  bd[key]['instrument'] )
                 self.evt.consoleLog(f"BUY BUY BUY BUY")
                 
         self.evt.consoleLog("Executed strat")
@@ -205,7 +211,25 @@ class AlgoEvent:
         order.buysell = buysell
         order.ordertype = 0 #0=market_order, 1=limit_order, 2=stop_order
         self.evt.sendOrder(order)
-
+    
+    # ATR trailing stop implementation
+    def update_stoploss(self, instrument, new_stoploss):
+        for ID in self.openOrder:
+            openPosition = self.openOrder[ID]
+            if openPosition['instrument'] == instrument:
+                lastprice = self.inst_data[instrument]['arr_close'][-1]
+                if openPosition['buysell'] == 1 and openPosition['stopLossLevel'] < lastprice - new_stoploss: 
+                    # for buy ordder, update stop loss if current ATR stop is higher than previous 
+                    newsl_level = lastprice - new_stoploss
+                    res = self.evt.update_opened_order(tradeID=ID, sl = newsl_level)
+                    # update the update stop loss using ATR stop
+                elif openPosition['buysell'] == -1 and lastprice + new_stoploss < openPosition['stopLossLevel']: 
+                    # for buy ordder, update stop loss if current ATR stop is higher than previous 
+                    newsl_level = lastprice + new_stoploss
+                    res = self.evt.update_opened_order(tradeID=ID, sl = newsl_level)
+                    # update the update stop loss using ATR stop
+                    
+        
 
     # utility function to find volume based on available balance
     def find_positionSize(self, lastprice):
