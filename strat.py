@@ -1,7 +1,7 @@
 from AlgoAPI import AlgoAPIUtil, AlgoAPI_Backtest
 from datetime import datetime, timedelta
 import talib, numpy
-
+import pandas as pd
 #todo: learn divergence, know more about the rules of the contest
 
 class AlgoEvent:
@@ -20,7 +20,7 @@ class AlgoEvent:
         self.midperiod = 8 #??
         self.slowperiod = 13 #??
          
-        self.risk_reward_ratio = 2 # take profit level : risk_reward_ratio * stoploss
+        self.risk_reward_ratio = 1.5 # take profit level : risk_reward_ratio * stoploss
         self.stoploss_atrlen = 2 # width of atr for stoplsos
         self.allocationratio_per_trade = 0.3
         
@@ -46,8 +46,8 @@ class AlgoEvent:
                     'arr_midMA': numpy.array([]),
                     'arr_slowMA': numpy.array([]),
                     'atr': numpy.array([]),
-                    'K': numpy.array([]) # Stoch rsi K
-                    'D': numpy.array([]) # Stoch rsi D
+                    'K': numpy.array([]), # Stoch rsi K
+                    'D': numpy.array([]), # Stoch rsi D
                     'entry_signal': 0,
                 }
                 
@@ -94,7 +94,7 @@ class AlgoEvent:
             
             # execute the trading strat for all instruments
             for key in bd:
-                if self.inst_data[key]['entry_signal'] == 1 or -1:
+                if self.inst_data[key]['entry_signal'] == 1 or self.inst_data[key]['entry_signal'] == -1:
                     self.execute_strat(bd, key)
             
             
@@ -151,17 +151,27 @@ class AlgoEvent:
         aroonosc = aroon_up - aroon_down
         
         
+        # Entry signal 2: stoch RSI crossover
+        
+        # Long Entry: K crossover D from below
+        long_stoch_rsi = inst['K'][-1] > inst['D'][-1] and inst['K'][-2] < inst['D'][-1]
+        # Short Entry: K crossover D from above
+        short_stoch_rsi = inst['K'][-1] < inst['D'][-1] and inst['K'][-2] > inst['D'][-2]
+        
+        
+        # TODO:  classify the different type of entry signal and set take profit/ stop loss accordingly
+        
         ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
         
         if ranging:
             return 0 
         
         # check for sell signal (price crosses upper bband and rsi > 70)
-        if lastprice >= upper_bband and rsiGeneral[-1] > 70:
+        if lastprice >= upper_bband and rsiGeneral[-1] > 70 or long_stoch_rsi:
             return -1
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
-        if lastprice <= lower_bband and rsiGeneral[-1] < 30:
+        if lastprice <= lower_bband and rsiGeneral[-1] < 30 or short_stoch_rsi:
             return 1
       
         
