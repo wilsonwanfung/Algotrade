@@ -45,7 +45,8 @@ class AlgoEvent:
                     'arr_fastMA': numpy.array([]),
                     'arr_midMA': numpy.array([]),
                     'arr_slowMA': numpy.array([]),
-                    'atr': numpy.array([])
+                    'atr': numpy.array([]),
+                    'entry_signal': 0
                 }
                 
                 
@@ -55,6 +56,8 @@ class AlgoEvent:
             self.lasttradetime = bd[self.myinstrument]['timestamp']
             for key in bd:
                 inst_data = self.inst_data[key]
+                
+                # Collecting price data
                 inst_data['high_price'] = numpy.append(inst_data['high_price'], bd[key]['highPrice'])
                 inst_data['arr_close'] = numpy.append(inst_data['arr_close'], bd[key]['lastPrice'])
                 inst_data['low_price'] = numpy.append(inst_data['low_price'], bd[key]['lowPrice'])
@@ -66,7 +69,15 @@ class AlgoEvent:
                 inst_data['arr_close'] = inst_data['arr_close'][-time_period::]
                 inst_data['low_price'] = inst_data['low_price'][-time_period::]
                 
+                
+                # Calculating indicator value
                 inst_data['atr'] = talib.ATR(inst_data['high_price'], inst_data['low_price'], inst_data['arr_close'], timeperiod = self.general_period)
+                
+                
+                inst_data['arr_fastMA'] = talib.EMA(inst_data['arr_close'], self.fastperiod)
+                inst_data['arr_midMA'] = talib.EMA(inst_data['arr_close'], self.midperiod)
+                inst_data['arr_slowMA'] = talib.EMA(inst_data['arr_close'], self.slowperiod)
+                inst_data['entry_signal'] = self.get_entry_signal(inst_data)
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
                     self.update_stoploss(key, stoploss)
@@ -77,7 +88,8 @@ class AlgoEvent:
             
             # execute the trading strat for all instruments
             for key in bd:
-                self.execute_strat(bd, key)
+                if self.inst_data[key]['entry_signal'] == 1 or -1:
+                    self.execute_strat(bd, key)
             
             
     def on_marketdatafeed(self, md, ab):
@@ -98,21 +110,13 @@ class AlgoEvent:
         return data[-window_size::].sum()/window_size
         
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi):
-        lowest_rsi, highest_rsi = min(rsi), max(rsi)
-        maxchange_rsi = max(abs(rsi[-1] - lowest_rsi), abs(rsi[-1] - highest_rsi), 0)
-        maxchange_ADXR = ADXR[-1] - min(ADXR)
-        if (ADXR[-1] < 20) or abs(AROONOsc[-1]) < 20 or 40 < rsi[-1] < 60 :
+        if (ADXR[-1] < 25) or abs(AROONOsc[-1]) < 30 or not MA_same_direction:
             return True # ranging market
         else:
             return False
-
-    # execute the trading strat for one instructment given the key and bd       
-    def execute_strat(self, bd, key):
-        self.evt.consoleLog("---------------------------------")
-        self.evt.consoleLog("Executing strat")
-
-        # find sma, sd, 2 bbands, bbw, and lastprice
-        inst = self.inst_data[key]
+    
+    def get_entry_signal(self, inst_data):
+        inst = inst_data
         arr_close = inst['arr_close']
         sma = self.find_sma(arr_close, self.ma_len)
         sd = numpy.std(arr_close)
@@ -121,7 +125,7 @@ class AlgoEvent:
         bbw = (upper_bband-lower_bband)/sma
         lastprice = arr_close[-1]
         
-        # calculate MA same direction?
+        # Use Short term MA same direction for ranging filters
         fast, mid, slow = inst['arr_fastMA'], inst['arr_midMA'], inst['arr_slowMA']
         all_MA_up, all_MA_down, MA_same_direction = False, False, False
         if len(fast) > 1 and len(mid) > 1 and len(slow) > 1:
@@ -142,9 +146,22 @@ class AlgoEvent:
         
         ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
         
-        if not ranging:
-            self.evt.consoleLog("Return early due to no ranging")
-            return 
+        if ranging:
+            return 0 
+        
+        # check for sell signal (price crosses upper bband and rsi > 70)
+        if lastprice >= upper_bband and rsiGeneral[-1] > 70:
+            return 1
+                
+        # check for buy signal (price crosses lower bband and rsi < 30)
+        if lastprice <= lower_bband and rsiGeneral[-1] < 30:
+            return -1
+      
+        
+    # execute the trading strat for one instructment given the key and bd       
+    def execute_strat(self, bd, key):
+        self.evt.consoleLog("---------------------------------")
+        self.evt.consoleLog("Executing strat")
         
         #sequeeze? (maybe remove)
         #is_sequeeze = False
@@ -159,28 +176,15 @@ class AlgoEvent:
         #self.evt.consoleLog(f"lower: {lower_bband}")
         #self.evt.consoleLog(f"bbw: {bbw}")
         
-        # check for sell signal (price crosses upper bband and rsi > 70)
-    
-        if lastprice >= upper_bband:
-            # caclulate the rsi
-            atr =  inst['atr'][-1]
-            stoploss = self.stoploss_atrlen * atr
-            # rsi = talib.RSI(inst["arr_close"], self.general_period) don't need this, same as rsigeneral
-            # check for rsi
-            if rsiGeneral[-1] > 70:
-                self.test_sendOrder(lastprice, -1, 'open', stoploss, self.find_positionSize(lastprice),  bd[key]['instrument'] )
-                self.evt.consoleLog(f"SELL SELL SELL SELL")
-                
-        # check for buy signal (price crosses lower bband and rsi < 30)
-        if lastprice <= lower_bband:
-            # caclulate the rsi
-            atr =  inst['atr'][-1]
-            stoploss = self.stoploss_atrlen * atr
-            #rsi = talib.RSI(inst["arr_close"], self.general_period)
-            # check for rsi
-            if rsiGeneral[-1] < 30:
-                self.test_sendOrder(lastprice, 1, "open", stoploss, self.find_positionSize(lastprice),  bd[key]['instrument'] )
-                self.evt.consoleLog(f"BUY BUY BUY BUY")
+        inst =  self.inst_data[key]
+        lastprice =  inst['arr_close'][-1]
+        direction = inst['entry_signal']
+        # caclulate the rsi
+        atr =  inst['atr'][-1]
+        stoploss = self.stoploss_atrlen * atr
+        # rsi = talib.RSI(inst["arr_close"], self.general_period) don't need this, same as rsigeneral
+        # check for rsi
+        self.test_sendOrder(lastprice, direction, 'open', stoploss, self.find_positionSize(lastprice),  bd[key]['instrument'] )
                 
         self.evt.consoleLog("Executed strat")
         self.evt.consoleLog("---------------------------------")
