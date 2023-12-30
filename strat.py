@@ -34,6 +34,8 @@ class AlgoEvent:
 
 
     def on_bulkdatafeed(self, isSync, bd, ab):
+        if not isSync:
+            return
         # set start time and inst_data in bd on the first call of this function
         if not self.start_time:
             self.start_time = bd[self.myinstrument]['timestamp']
