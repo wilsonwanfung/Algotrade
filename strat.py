@@ -22,7 +22,7 @@ class AlgoEvent:
          
         self.risk_reward_ratio = 1.5 # take profit level : risk_reward_ratio * stoploss
         self.stoploss_atrlen = 2 # width of atr for stoplsos
-        self.allocationratio_per_trade = 0.3
+        self.allocationratio_per_trade = 0.2
         
         self.openOrder = {} # existing open position for updating stoploss and checking direction
         self.netOrder = {} # existing net order
@@ -34,8 +34,6 @@ class AlgoEvent:
 
 
     def on_bulkdatafeed(self, isSync, bd, ab):
-        if not isSync:
-            return
         # set start time and inst_data in bd on the first call of this function
         if not self.start_time:
             self.start_time = bd[self.myinstrument]['timestamp']
@@ -77,8 +75,8 @@ class AlgoEvent:
                 
                 sma = self.find_sma(inst_data['arr_close'], self.ma_len)
                 sd = numpy.std(inst_data['arr_close'])
-                inst_data['upper_bband'] = numpy.append(inst_data['upper_bband'], sma + 2*sd)
-                inst_data['lower_bband'] = numpy.append(inst_data['lower_bband'], sma - 2*sd)
+                inst_data['upper_bband'] = numpy.append(inst_data['upper_bband'], sma + 3*sd)
+                inst_data['lower_bband'] = numpy.append(inst_data['lower_bband'], sma - 3*sd)
                 
                 # Calculating indicator value
                 inst_data['atr'] = talib.ATR(inst_data['high_price'], inst_data['low_price'], inst_data['arr_close'], timeperiod = self.general_period)
@@ -122,7 +120,58 @@ class AlgoEvent:
     
     def find_sma(self, data, window_size):
         return data[-window_size::].sum()/window_size
+    
+    def momentumFilter(self, APO, MACD, RSIFast, RSIGeneral, AROONOsc):
+        # APO rising check
+        APORising = False
+        if numpy.isnan(APO[-1]) or numpy.isnan(APO[-2]):
+            APORising = False
+        elif int(APO[-1]) > int(APO[-2]):
+            APORising = True
         
+        # macd rising check
+        MACDRising = False
+        if numpy.isnan(MACD[-1]) or numpy.isnan(MACD[-2]):
+            MACDRising = False
+        elif int(MACD[-1]) > int(MACD[-2]):
+            MACDRising = True
+        
+        # RSI check (additional)
+        RSIFastRising, RSIGeneralRising = False, False
+        if numpy.isnan(RSIFast[-1]) or numpy.isnan(RSIFast[-2]) or numpy.isnan(RSIGeneral[-2]) or numpy.isnan(RSIGeneral[-2]):
+            RSIFastRising, RSIGeneralRising = False, False
+        else:
+            if int(RSIFast[-1]) > int(RSIFast[-2]):
+                RSIFastRising = True
+            if int(RSIGeneral[-1]) > int(RSIGeneral[-2]):
+                RSIGeneralRising = True
+            
+        # aroonosc rising check
+        AROON_direction = 0 # not moving
+        if numpy.isnan(AROONOsc[-1]) or numpy.isnan(AROONOsc[-2]):
+            AROON_direction = 0
+        elif int(AROONOsc[-1]) > int(AROONOsc[-2]):
+            AROON_direction = 1 # moving upwawrds
+        elif int(AROONOsc[-1]) < int(AROONOsc[-2]):
+            AROON_direction = -1 # moving downwards
+        else:
+            AROON_direction = 0 # not moving
+
+        # aroon oscillator positive check
+        AROON_positive = False
+        if numpy.isnan(AROONOsc[-1]):
+            AROON_positive = False
+        elif int(AROONOsc[-1]) > 0:
+            AROON_positive = True
+            
+        if (APO[-1] > 0) and (RSIFast[-1] > 50 or RSIFastRising or RSIGeneralRising) or (MACDRising or AROON_direction == 1 or AROON_positive):
+            return 1 # Bullish 
+            
+        elif (APO[-1] < 0) and (RSIFast[-1] < 50 or not RSIFastRising or not RSIGeneralRising) and (not MACDRising or AROON_direction == -1 or not AROON_positive):
+            return -1 # Bearish
+        else:
+            return 0 # Neutral
+            
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi):
         if (ADXR[-1] < 25) or abs(AROONOsc[-1]) < 30 or not MA_same_direction:
             return True # ranging market
@@ -169,15 +218,17 @@ class AlgoEvent:
         
         ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
         
+        bullish = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc)
+        
         if ranging:
             return 0 
         
         # check for sell signal (price crosses upper bband and rsi > 70)
-        if lastprice >= upper_bband and rsiGeneral[-1] > 70 or long_stoch_rsi:
+        if bullish and lastprice >= upper_bband and rsiGeneral[-1] > 70 or long_stoch_rsi:
             return -1
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
-        if lastprice <= lower_bband and rsiGeneral[-1] < 30 or short_stoch_rsi:
+        if not bullish and lastprice <= lower_bband and rsiGeneral[-1] < 30 or short_stoch_rsi:
             return 1
       
         
