@@ -94,6 +94,7 @@ class AlgoEvent:
     def find_sma(self, data, window_size):
         return data[-window_size::].sum()/window_size
         
+    # idk how this work, but whatever
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi):
         lowest_rsi, highest_rsi = min(rsi), max(rsi)
         maxchange_rsi = max(abs(rsi[-1] - lowest_rsi), abs(rsi[-1] - highest_rsi), 0)
@@ -102,6 +103,7 @@ class AlgoEvent:
             return True # ranging market
         else:
             return False
+            
 
     # execute the trading strat for one instructment given the key and bd       
     def execute_strat(self, bd, key):
@@ -139,9 +141,14 @@ class AlgoEvent:
         
         ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
         
+        # only continue the rest if ranging (ie the market is moving sideway)
+        if not ranging:
+            self.evt.consoleLog("Not ranging, return early")
+            return
+        
         
         #sequeeze? (maybe remove)
-        #is_sequeeze = False
+        is_sequeeze = False
         #self.arr_bbw = numpy.append(self.arr_bbw, bbw)
         #self.arr_bbw = self.arr_bbw[-self.bbw_len::]
         #is_sequeeze = self.is_sequeeze(self.arr_bbw)
@@ -155,32 +162,23 @@ class AlgoEvent:
         #self.evt.consoleLog(f"bbw: {bbw}")
         
         # check for sell signal (price crosses upper bband and rsi > 70)
-        """
-        if lastprice >= upper_bband:
-            # caclulate the rsi
-            
-            # check for rsi
-            if rsi > 60:
-                self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice, is_sequeeze))
-                self.evt.consoleLog(f"SELL SELL SELL SELL")
+        
+        if lastprice >= upper_bband and rsiGeneral[-1] > 60:
+            self.test_sendOrder(lastprice, -1, 'open', self.find_positionSize(lastprice, is_sequeeze))
+            self.evt.consoleLog(f"SELL SELL SELL SELL")
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
-        if lastprice <= lower_bband:
-            # caclulate the rsi
-            rsi = self.find_rsi(arr_close, self.rsi_len)
-            self.evt.consoleLog(f"rsi: {rsi}")
-            # check for rsi
-            if rsi < 30:
-                self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice, is_sequeeze))
-                self.evt.consoleLog(f"BUY BUY BUY BUY")
+        if lastprice <= lower_bband and rsiGeneral[-1] < 40:
+            self.test_sendOrder(lastprice, 1, "open", self.find_positionSize(lastprice, is_sequeeze))
+            self.evt.consoleLog(f"BUY BUY BUY BUY")
                 
         self.evt.consoleLog("Executed strat")
         self.evt.consoleLog("---------------------------------")
-        """
+
 
         
         
-        
+    """
     # determine if there is bollinger squeeze
     def is_sequeeze(self, arr_bbw):
         if len(arr_bbw) < self.bbw_len:
@@ -188,6 +186,7 @@ class AlgoEvent:
         return arr_bbw[-1] == arr_bbw.min()
     
         
+    """
     """
     def find_rsi(self, arr_close, window_size):
         # we use previous day's close price as today's open price, which is not entirely accurate
