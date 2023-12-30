@@ -32,10 +32,6 @@ class AlgoEvent:
 
 
     def on_bulkdatafeed(self, isSync, bd, ab):
-        # see if sync
-        if not isSync:
-            return
-
         # set start time and inst_data in bd on the first call of this function
         if not self.start_time:
             self.start_time = bd[self.myinstrument]['timestamp']
@@ -62,7 +58,8 @@ class AlgoEvent:
                 inst_data['low_price'] = numpy.append(inst_data['low_price'], bd[key]['lowPrice'])
                 
                 time_period = self.ma_len * 2
-                # keep the most recent observations for arr_close (record of close prices)
+                
+                # keep the most recent observations
                 inst_data['high_price'] = inst_data['high_price'][-time_period::]
                 inst_data['arr_close'] = inst_data['arr_close'][-time_period::]
                 inst_data['low_price'] = inst_data['low_price'][-time_period::]
@@ -139,6 +136,9 @@ class AlgoEvent:
         
         ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
         
+        if not ranging:
+            self.evt.consoleLog("Return early due to no ranging")
+            return 
         
         #sequeeze? (maybe remove)
         #is_sequeeze = False
@@ -149,7 +149,6 @@ class AlgoEvent:
         # debug
         self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
         #self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
-        #self.evt.consoleLog(f"sma: {sma}")
         #self.evt.consoleLog(f"upper: {upper_bband}")
         #self.evt.consoleLog(f"lower: {lower_bband}")
         #self.evt.consoleLog(f"bbw: {bbw}")
@@ -160,10 +159,10 @@ class AlgoEvent:
             # caclulate the rsi
             atr =  inst['atr'][-1]
             stoploss = self.stoploss_atrlen * atr
-            rsi = talib.RSI(inst["arr_close"], self.general_period)
+            # rsi = talib.RSI(inst["arr_close"], self.general_period) don't need this, same as rsigeneral
             # check for rsi
-            if True:
-                self.test_sendOrder(lastprice, -1, 'open', stoploss, self.find_positionSize(lastprice))
+            if rsiGeneral[-1] > 70:
+                self.test_sendOrder(lastprice, -1, 'open', stoploss, self.find_positionSize(lastprice), inst['instrument'])
                 self.evt.consoleLog(f"SELL SELL SELL SELL")
                 
         # check for buy signal (price crosses lower bband and rsi < 30)
@@ -171,10 +170,10 @@ class AlgoEvent:
             # caclulate the rsi
             atr =  inst['atr'][-1]
             stoploss = self.stoploss_atrlen * atr
-            rsi = talib.RSI(inst["arr_close"], self.general_period)
+            #rsi = talib.RSI(inst["arr_close"], self.general_period)
             # check for rsi
-            if True:
-                self.test_sendOrder(lastprice, 1, "open", stoploss, self.find_positionSize(lastprice))
+            if rsiGeneral[-1] < 30:
+                self.test_sendOrder(lastprice, 1, "open", stoploss, self.find_positionSize(lastprice), inst['instrument'])
                 self.evt.consoleLog(f"BUY BUY BUY BUY")
                 
         self.evt.consoleLog("Executed strat")
@@ -191,9 +190,9 @@ class AlgoEvent:
     
         
 
-    def test_sendOrder(self, lastprice, buysell, openclose, stoploss, volume = 10):
+    def test_sendOrder(self, lastprice, buysell, openclose, stoploss, volume, instrument):
         order = AlgoAPIUtil.OrderObject()
-        order.instrument = self.myinstrument
+        order.instrument = instrument
         order.orderRef = 1
         if buysell==1:
             order.takeProfitLevel = lastprice +  self.risk_reward_ratio * stoploss
@@ -207,7 +206,8 @@ class AlgoEvent:
         order.ordertype = 0 #0=market_order, 1=limit_order, 2=stop_order
         self.evt.sendOrder(order)
 
-      # utility function to find volume based on available balance
+
+    # utility function to find volume based on available balance
     def find_positionSize(self, lastprice):
         res = self.evt.getAccountBalance()
         availableBalance = res["availableBalance"]
