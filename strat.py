@@ -263,8 +263,8 @@ class AlgoEvent:
         
     # execute the trading strat for one instructment given the key and bd       
     def execute_strat(self, bd, key):
-        self.evt.consoleLog("---------------------------------")
-        self.evt.consoleLog("Executing strat")
+        #self.evt.consoleLog("---------------------------------")
+        #self.evt.consoleLog("Executing strat")
         
         #sequeeze? (maybe remove)
         #is_sequeeze = False
@@ -273,7 +273,7 @@ class AlgoEvent:
         #is_sequeeze = self.is_sequeeze(self.arr_bbw)
         
         # debug
-        self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
+        #self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
         #self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
         #self.evt.consoleLog(f"upper: {upper_bband}")
         #self.evt.consoleLog(f"lower: {lower_bband}")
@@ -298,8 +298,8 @@ class AlgoEvent:
       
         self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice),  bd[key]['instrument'] )
                 
-        self.evt.consoleLog("Executed strat")
-        self.evt.consoleLog("---------------------------------")
+        #self.evt.consoleLog("Executed strat")
+        #self.evt.consoleLog("---------------------------------")
 
         
         
