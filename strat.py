@@ -2,8 +2,6 @@ from AlgoAPI import AlgoAPIUtil, AlgoAPI_Backtest
 from datetime import datetime, timedelta
 import talib, numpy
 
-#todo: learn divergence, know more about the rules of the contest
-
 class AlgoEvent:
     def __init__(self):
         self.lasttradetime = datetime(2000,1,1)
