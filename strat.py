@@ -200,9 +200,6 @@ class AlgoEvent:
         squeeze_breakdown = squeeze and lastprice < upper_bband
         
         
-        
-    
-        
         # Use Short term MA same direction for ranging filters
         fast, mid, slow = inst['arr_fastMA'], inst['arr_midMA'], inst['arr_slowMA']
         all_MA_up, all_MA_down, MA_same_direction = False, False, False
@@ -211,7 +208,6 @@ class AlgoEvent:
             all_MA_down = fast[-1] < fast[-2] and mid[-1] < mid[-2] and slow[-1] < slow[-2]
             MA_same_direction = all_MA_up or all_MA_down
             
-        
         # ranging filter (to confirm moving sideway)
         adxr = talib.ADXR(inst['high_price'], inst['low_price'], inst['arr_close'], 
             timeperiod=self.general_period)
@@ -263,17 +259,11 @@ class AlgoEvent:
         
     # execute the trading strat for one instructment given the key and bd       
     def execute_strat(self, bd, key):
-        #self.evt.consoleLog("---------------------------------")
-        #self.evt.consoleLog("Executing strat")
-        
-        #sequeeze? (maybe remove)
-        #is_sequeeze = False
-        #self.arr_bbw = numpy.append(self.arr_bbw, bbw)
-        #self.arr_bbw = self.arr_bbw[-self.bbw_len::]
-        #is_sequeeze = self.is_sequeeze(self.arr_bbw)
-        
+        self.evt.consoleLog("---------------------------------")
+        self.evt.consoleLog("Executing strat")
+
         # debug
-        #self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
+        self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
         #self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
         #self.evt.consoleLog(f"upper: {upper_bband}")
         #self.evt.consoleLog(f"lower: {lower_bband}")
@@ -298,19 +288,8 @@ class AlgoEvent:
       
         self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice),  bd[key]['instrument'] )
                 
-        #self.evt.consoleLog("Executed strat")
-        #self.evt.consoleLog("---------------------------------")
-
-        
-        
-        
-    # determine if there is bollinger squeeze
-    def is_sequeeze(self, arr_bbw):
-        if len(arr_bbw) < self.bbw_len:
-            return False
-        return arr_bbw[-1] == arr_bbw.min()
-    
-
+        self.evt.consoleLog("Executed strat")
+        self.evt.consoleLog("---------------------------------")
 
     def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument):
         order = AlgoAPIUtil.OrderObject()
