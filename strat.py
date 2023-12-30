@@ -2,6 +2,8 @@ from AlgoAPI import AlgoAPIUtil, AlgoAPI_Backtest
 from datetime import datetime, timedelta
 import talib, numpy
 
+#todo: learn divergence, know more about the rules of the contest
+
 class AlgoEvent:
     def __init__(self):
         self.lasttradetime = datetime(2000,1,1)
@@ -44,7 +46,9 @@ class AlgoEvent:
                     'arr_midMA': numpy.array([]),
                     'arr_slowMA': numpy.array([]),
                     'atr': numpy.array([]),
-                    'entry_signal': 0
+                    'K': numpy.array([]) # Stoch rsi K
+                    'D': numpy.array([]) # Stoch rsi D
+                    'entry_signal': 0,
                 }
                 
                 
@@ -75,6 +79,10 @@ class AlgoEvent:
                 inst_data['arr_fastMA'] = talib.EMA(inst_data['arr_close'], self.fastperiod)
                 inst_data['arr_midMA'] = talib.EMA(inst_data['arr_close'], self.midperiod)
                 inst_data['arr_slowMA'] = talib.EMA(inst_data['arr_close'], self.slowperiod)
+                K, D = self.stoch_rsi(inst_data['arr_close'], k = 3, d = 3, period = 14)
+                inst_data['K'], inst_data['D'] = numpy.append(inst_data['K'], K), numpy.append(inst_data['D'], D)
+                
+                
                 inst_data['entry_signal'] = self.get_entry_signal(inst_data)
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
@@ -142,6 +150,7 @@ class AlgoEvent:
         aroon_up, aroon_down = talib.AROON(inst['high_price'], inst['low_price'], timeperiod=self.general_period)
         aroonosc = aroon_up - aroon_down
         
+        
         ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
         
         if ranging:
@@ -196,7 +205,7 @@ class AlgoEvent:
             return False
         return arr_bbw[-1] == arr_bbw.min()
     
-        
+
 
     def test_sendOrder(self, lastprice, buysell, openclose, stoploss, volume, instrument):
         order = AlgoAPIUtil.OrderObject()
@@ -214,6 +223,18 @@ class AlgoEvent:
         order.ordertype = 0 #0=market_order, 1=limit_order, 2=stop_order
         self.evt.sendOrder(order)
     
+    
+    # Finder of Stochastic RSI
+    def stoch_rsi(self, arr_close, k, d, period):
+        rsi = talib.RSI(arr_close, period)
+        df = pd.DataFrame(rsi)
+        stochastic_rsi = 100 * (df - df.rolling(period).min()) / (df.rolling(period).max() - df.rolling(period).min())
+        K = stochastic_rsi.rolling(k).mean()
+        D = K.rolling(d).mean().iloc[-1].iloc[0]
+        K = K.iloc[-1].iloc[0]
+        return K, D 
+        # K and D are returned as a value
+        
     # ATR trailing stop implementation
     def update_stoploss(self, instrument, new_stoploss):
         for ID in self.openOrder:
