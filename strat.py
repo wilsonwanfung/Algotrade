@@ -45,6 +45,8 @@ class AlgoEvent:
                     'arr_fastMA': numpy.array([]),
                     'arr_midMA': numpy.array([]),
                     'arr_slowMA': numpy.array([]),
+                    'upper_bband': numpy.array([]),
+                    'lower_bband': numpy.array([]),
                     'atr': numpy.array([]),
                     'K': numpy.array([]), # Stoch rsi K
                     'D': numpy.array([]), # Stoch rsi D
@@ -71,6 +73,10 @@ class AlgoEvent:
                 inst_data['arr_close'] = inst_data['arr_close'][-time_period::]
                 inst_data['low_price'] = inst_data['low_price'][-time_period::]
                 
+                sma = self.find_sma(inst_data['arr_close'], self.ma_len)
+                sd = numpy.std(inst_data['arr_close'])
+                inst_data['upper_bband'] = numpy.append(inst_data['upper_bband'], sma + 2*sd)
+                inst_data['lower_bband'] = numpy.append(inst_data['lower_bband'], sma - 2*sd)
                 
                 # Calculating indicator value
                 inst_data['atr'] = talib.ATR(inst_data['high_price'], inst_data['low_price'], inst_data['arr_close'], timeperiod = self.general_period)
@@ -124,10 +130,8 @@ class AlgoEvent:
     def get_entry_signal(self, inst_data):
         inst = inst_data
         arr_close = inst['arr_close']
-        sma = self.find_sma(arr_close, self.ma_len)
-        sd = numpy.std(arr_close)
-        upper_bband = sma + 2*sd
-        lower_bband = sma - 2*sd
+        sma = self.find_sma(inst_data['arr_close'], self.ma_len)
+        upper_bband, lower_bband = inst['upper_bband'][-1], inst['lower_bband'][-1]
         bbw = (upper_bband-lower_bband)/sma
         lastprice = arr_close[-1]
         
@@ -199,9 +203,9 @@ class AlgoEvent:
         # caclulate the rsi
         atr =  inst['atr'][-1]
         stoploss = self.stoploss_atrlen * atr
-        # rsi = talib.RSI(inst["arr_close"], self.general_period) don't need this, same as rsigeneral
-        # check for rsi
-        self.test_sendOrder(lastprice, direction, 'open', stoploss, self.find_positionSize(lastprice),  bd[key]['instrument'] )
+        takeprofit = (inst['upper_bband'][-1] + inst['lower_bband'][-1])/2 # use the middle band as take profit
+      
+        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice),  bd[key]['instrument'] )
                 
         self.evt.consoleLog("Executed strat")
         self.evt.consoleLog("---------------------------------")
@@ -217,15 +221,15 @@ class AlgoEvent:
     
 
 
-    def test_sendOrder(self, lastprice, buysell, openclose, stoploss, volume, instrument):
+    def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument):
         order = AlgoAPIUtil.OrderObject()
         order.instrument = instrument
         order.orderRef = 1
         if buysell==1:
-            order.takeProfitLevel = lastprice +  self.risk_reward_ratio * stoploss
+            order.takeProfitLevel = lastprice +  takeprofit
             order.stopLossLevel = lastprice - stoploss 
         elif buysell==-1:
-            order.takeProfitLevel = lastprice - self.risk_reward_ratio * stoploss
+            order.takeProfitLevel = lastprice - takeprofit
             order.stopLossLevel = lastprice + stoploss
         order.volume = volume
         order.openclose = openclose
