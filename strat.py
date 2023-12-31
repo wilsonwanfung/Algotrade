@@ -188,7 +188,9 @@ class AlgoEvent:
     def find_sma(self, data, window_size):
         return data[-window_size::].sum()/window_size
     
-    def momentumFilter(self, APO, MACD, RSIFast, RSIGeneral, AROONOsc):
+    def momentumFilter(self, APO, MACD, RSIFast, RSIGeneral, AROONOsc, strict):
+        
+        
         # APO rising check
         APORising = False
         if numpy.isnan(APO[-1]) or numpy.isnan(APO[-2]):
@@ -230,14 +232,24 @@ class AlgoEvent:
             AROON_positive = False
         elif int(AROONOsc[-1]) > 0:
             AROON_positive = True
-            
-        if (APO[-1] > 0) or (RSIFast[-1] > 50 or RSIFastRising or RSIGeneralRising) or (MACDRising or AROON_direction == 1 or AROON_positive):
-            return 1 # Bullish 
-            
-        elif (APO[-1] < 0) or (RSIFast[-1] < 50 or not RSIFastRising or not RSIGeneralRising) or (not MACDRising or AROON_direction == -1 or not AROON_positive):
-            return -1 # Bearish
+        
+        if strict:
+            if (APO[-1] > 0) and (RSIFast[-1] > 50 or RSIFastRising or RSIGeneralRising) and (MACDRising or AROON_direction == 1 or AROON_positive):
+                return 1 # Bullish 
+                
+            elif (APO[-1] < 0) and (RSIFast[-1] < 50 or not RSIFastRising or not RSIGeneralRising) and (not MACDRising or AROON_direction == -1 or not AROON_positive):
+                return -1 # Bearish
+            else:
+                return 0 # Neutral
+                
         else:
-            return 0 # Neutral
+            if (APO[-1] > 0) or (RSIFast[-1] > 50 or RSIFastRising or RSIGeneralRising) or (MACDRising or AROON_direction == 1 or AROON_positive):
+                return 1 # Bullish 
+                
+            elif (APO[-1] < 0) or (RSIFast[-1] < 50 or not RSIFastRising or not RSIGeneralRising) or (not MACDRising or AROON_direction == -1 or not AROON_positive):
+                return -1 # Bearish
+            else:
+                return 0 # Neutral
             
     def testrangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi): 
         score = 0
@@ -384,27 +396,26 @@ class AlgoEvent:
         ranging1 = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral, 1)
         ranging2_3 = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral, 2)
         
-        bullish = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc)
+        bullish1 = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc, False)
+        bullish2_3 = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc, True)
         
-        
-        # check for sell signal 
-        if bullish == -1:
-            if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging1:
-                #self.evt.consoleLog("bb + rsi strat sell signal")
+        # check for buy
+        if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging1 and bullish1 == -1:
                 return -1
-            elif squeeze_breakdown and not ranging2:
-                return -2
-            elif short_stoch_rsi and not ranging2:
-                return -3 
-        # check for buy signal
-        elif bullish == 1:
-            if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging1:
-                #self.evt.consoleLog("bb + rsi strat buy signal")
-                return 1
-            elif squeeze_breakout and not ranging2:
-                return 2
-            elif long_stoch_rsi and not ranging2:
-                return 3
+        if squeeze_breakdown and not ranging2 and bullish2_3 == -1:
+            return -2
+        if short_stoch_rsi and not ranging2 and bullish2_3 == -1:
+            return -3 
+        
+        #check for sell
+        if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging1 and bullish1 == 1:
+            #self.evt.consoleLog("bb + rsi strat buy signal")
+            return 1
+        if squeeze_breakout and not ranging2 and bullish2_3 == 1:
+            return 2
+        if long_stoch_rsi and not ranging2 and bullish2_3 == 1:
+            return 3
+            
         # no signal
         return 0 
      
