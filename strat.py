@@ -54,8 +54,6 @@ class AlgoEvent:
                     'K': numpy.array([]), # Stoch rsi K
                     'D': numpy.array([]), # Stoch rsi D
                     'entry_signal': 0,
-                    'score1': 0, # higher better
-                    'score2_3': 0 # higher better
                 }
                 
                 
@@ -63,7 +61,6 @@ class AlgoEvent:
         if bd[self.myinstrument]['timestamp'] >= self.lasttradetime + timedelta(hours=24):
             # update inst_data's arr close, highprice and lowprice, and MA lines
             self.lasttradetime = bd[self.myinstrument]['timestamp']
-            
             for key in bd:
                 inst_data = self.inst_data[key]
                 
@@ -96,9 +93,7 @@ class AlgoEvent:
                 
                 
                 inst_data['entry_signal'] = self.get_entry_signal(inst_data)
-                
-                self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
-                
+                #self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
                     self.update_stoploss(key, stoploss)
@@ -111,9 +106,9 @@ class AlgoEvent:
                 
                 #self.evt.consoleLog(f"upper_bband: {inst_data['upper_bband']}")
                 #self.evt.consoleLog(f"lower_bband: {inst_data['lower_bband']}")
-                self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
+                #self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
                 
-                self.evt.consoleLog(f"atr: {inst_data['atr']}")
+                #self.evt.consoleLog(f"atr: {inst_data['atr']}")
                 
                 #self.evt.consoleLog(f"arr_fastMA: {inst_data['arr_fastMA']}")
                 #self.evt.consoleLog(f"arr_midMA: {inst_data['arr_midMA']}")
@@ -122,11 +117,6 @@ class AlgoEvent:
                 #self.evt.consoleLog(f"K: {inst_data['K']}")
                 #self.evt.consoleLog(f"D: {inst_data['D']}")
                 
-            # ranking for signal 2 and 3 based on BBW (favours less BBW)
-            # get scores for ranking
-            self.get_score2_3(bd, self.inst_data)
-            # sort self.inst_data by least BBW
-            
             
             # execute the trading strat for all instruments
             for key in bd:
@@ -208,23 +198,7 @@ class AlgoEvent:
         else:
             return False
     
-    # get score1 for all instruments for ranking
-    def get_score2_3(self, bd, inst_data):
-        # we use bbw as score, the less the better
-        # loop once to get the min. bbw among all instruments
-        min_bbw = 1000000000
-        max_bbw = 0
-        for key in bd:
-            min_bbw = min(min_bbw, inst_data[key]["BB_width"][-1])
-            max_bbw = max(max_bbw, inst_data[key]["BB_width"][-1])
-        
-        # assign score for each instruments
-        for key in bd:
-            inst_data[key]["score2_3"] = (max_bbw - inst_data[key]["BB_width"][-1])/ (max_bbw-min_bbw)
-            self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}") 
-
-        
-        
+    
     def get_entry_signal(self, inst_data):
         inst = inst_data
         arr_close = inst['arr_close']
@@ -321,7 +295,7 @@ class AlgoEvent:
         
         inst =  self.inst_data[key]
         lastprice =  inst['arr_close'][-1]
-        
+        position_size = allocated_capital[key]
         # set direction, ie decide if buy or sell, based on entry signal
         direction = 1
         if inst['entry_signal'] > 0:
@@ -342,7 +316,7 @@ class AlgoEvent:
             # if current position exist in open order as well as opposite direction and same trading signal, close the order
             self.closeAllOrder(instrument, self.openOrder[instrument][orderRef])
             
-        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice), key, inst['entry_signal'] )
+        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, position_size, key, inst['entry_signal'] )
                 
         #self.evt.consoleLog("Executed strat")
         #self.evt.consoleLog("---------------------------------")
@@ -405,22 +379,28 @@ class AlgoEvent:
                     newsl_level = lastprice + new_stoploss
                     res = self.evt.update_opened_order(tradeID=ID, sl = newsl_level)
                     # update the update stop loss using ATR stop
+
+    def allocate_capital(strategy_returns, capital_available):
+        total_returns = sum(strategy_returns)
+        weights = [return_ / total_returns for return_ in strategy_returns]
+        allocated_capital = [weight * capital_available for weight in weights]
+        return allocated_capital
                     
-        
+    
 
     # utility function to find volume based on available balance
-    def find_positionSize(self, lastprice):
+    def find_positionSize(self, lastprice, allocated_capital):
         res = self.evt.getAccountBalance()
         availableBalance = res["availableBalance"]
-        ratio = self.allocationratio_per_trade
-        volume = (availableBalance*ratio) / lastprice
-        total =  volume *  lastprice
-        while total < self.allocationratio_per_trade * availableBalance:
+        ratio = allocated_capital / availableBalance
+        volume = (availableBalance * ratio) / lastprice
+        total = volume * lastprice
+        while total < allocated_capital:
             ratio *= 1.05
-            volume = (availableBalance*ratio) / lastprice
-            total =  volume *  lastprice
+            volume = (availableBalance * ratio) / lastprice
+            total = volume * lastprice
         while total > availableBalance:
             ratio *= 0.95
-            volume = (availableBalance*ratio) / lastprice
-            total =  volume *  lastprice
+            volume = (availableBalance * ratio) / lastprice
+            total = volume * lastprice
         return volume
