@@ -1,4 +1,3 @@
-
 from AlgoAPI import AlgoAPIUtil, AlgoAPI_Backtest
 from datetime import datetime, timedelta
 import talib, numpy
@@ -97,7 +96,7 @@ class AlgoEvent:
                 
                 inst_data['entry_signal'] = self.get_entry_signal(inst_data)
                 
-                self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
+                #self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
                 
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
@@ -111,9 +110,9 @@ class AlgoEvent:
                 
                 #self.evt.consoleLog(f"upper_bband: {inst_data['upper_bband']}")
                 #self.evt.consoleLog(f"lower_bband: {inst_data['lower_bband']}")
-                self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
+                #self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
                 
-                self.evt.consoleLog(f"atr: {inst_data['atr']}")
+                #self.evt.consoleLog(f"atr: {inst_data['atr']}")
                 
                 #self.evt.consoleLog(f"arr_fastMA: {inst_data['arr_fastMA']}")
                 #self.evt.consoleLog(f"arr_midMA: {inst_data['arr_midMA']}")
@@ -125,13 +124,38 @@ class AlgoEvent:
             # ranking for signal 2 and 3 based on BBW (favours less BBW)
             # get scores for ranking
             self.get_score2_3(bd, self.inst_data)
-            # sort self.inst_data by least BBW
+            # sorting
+            sorted_list = []
+            for key in bd:
+                score2_3 = self.inst_data[key]["score2_3"]
+                if numpy.isnan(score2_3):
+                    continue
+                sorted_list.append((key, score2_3))
+            sorted_list = sorted(sorted_list, key=lambda tup: tup[1])
+            sorted_list.reverse()
+            #self.evt.consoleLog(f"sorted list: {sorted_list}")
+            
+            # cut down the len
+            new_len = min((len(sorted_list)-1 ) // 2, 5)
+            sorted_list = sorted_list[0:new_len:]
+            #self.evt.consoleLog(f"sorted list: {sorted_list}")
+            
+            
+            # execute trading strat of signal 2, 3 based on the scores
+            for (key, score2_3) in sorted_list:
+                if self.inst_data[key]['entry_signal'] in [-3,-2,2,3]:
+                    self.execute_strat(bd, key)
+         
+            
+            
             
             
             # execute the trading strat for all instruments
+            """
             for key in bd:
                 if self.inst_data[key]['entry_signal'] != 0:
                     self.execute_strat(bd, key)
+            """
             
             
     def on_marketdatafeed(self, md, ab):
@@ -221,7 +245,7 @@ class AlgoEvent:
         # assign score for each instruments
         for key in bd:
             inst_data[key]["score2_3"] = (max_bbw - inst_data[key]["BB_width"][-1])/ (max_bbw-min_bbw)
-            self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}") 
+            #self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}") 
 
         
         
@@ -319,14 +343,14 @@ class AlgoEvent:
         #self.evt.consoleLog(f"lower: {lower_bband}")
         #self.evt.consoleLog(f"bbw: {bbw}")
         
-        inst =  self.inst_data[key]
+        inst = self.inst_data[key]
         lastprice =  inst['arr_close'][-1]
         
         # set direction, ie decide if buy or sell, based on entry signal
         direction = 1
         if inst['entry_signal'] > 0:
             direction = 1 #long
-        elif inst['entry_singal'] < 0:
+        elif inst['entry_signal'] < 0:
             direction = -1 #short
         
         
