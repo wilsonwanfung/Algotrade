@@ -146,9 +146,13 @@ class AlgoEvent:
             self.temp_traded_dict["TwoDay"] = self.temp_traded_dict["OneDay"]
             self.temp_traded_dict["ZeroDay"] = []
             
+            trade_2_3 = 0
+            trade_1 = 0
             
             # execute trading strat based on score2_3 (non-ranging market)
             for (key, score2_3) in self.sorted_score2_3_list:
+                if trade_2_3 >= 2:
+                    break
                 # check if recently traded
                 if key in self.temp_traded_dict["OneDay"] or key in self.temp_traded_dict["TwoDay"] or key in self.temp_traded_dict["ZeroDay"]:
                     return
@@ -156,10 +160,13 @@ class AlgoEvent:
                 if self.inst_data[key]['entry_signal'] in [-3,-2,2,3]:
                     self.execute_strat(bd, key)
                     self.temp_traded_dict["ZeroDay"].append(key)
-                    break # only trade once
+                    trade_2_3 += 1
+                     # only trade once
                     
             # execute the trading strat based on score1 (ranging market), but exclude those that excuted b4
             for (key, score1) in self.sorted_score1_list:
+                if trade_1 >= 2:
+                    break
                 # check if recently traded
                 if key in self.temp_traded_dict["OneDay"] or key in self.temp_traded_dict["TwoDay"] or key in self.temp_traded_dict["ZeroDay"]:
                     return
@@ -167,7 +174,7 @@ class AlgoEvent:
                 if self.inst_data[key]['entry_signal'] in [-1,1]:
                     self.execute_strat(bd, key)
                     self.temp_traded_dict["ZeroDay"].append(key)
-                    break # only trade once
+                    trade_1 += 1
                 
             
             
