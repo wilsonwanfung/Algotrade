@@ -17,7 +17,8 @@ class AlgoEvent:
         self.bb_sdwidth = 2
         self.fastperiod = 5 
         self.midperiod = 8
-        self.slowperiod = 13
+        self.slowperiod = 14
+        self.longperiod = 50
         self.squeezeThreshold_percentile = 0.2
         self.risk_reward_ratio = 2.5 # take profit level : risk_reward_ratio * stoploss
         self.stoploss_atrlen = 2.5 # width of atr for stoplsos
@@ -94,6 +95,7 @@ class AlgoEvent:
                 inst_data['arr_fastMA'] = talib.EMA(inst_data['arr_close'], self.fastperiod)
                 inst_data['arr_midMA'] = talib.EMA(inst_data['arr_close'], self.midperiod)
                 inst_data['arr_slowMA'] = talib.EMA(inst_data['arr_close'], self.slowperiod)
+                inst_data['arr_longMA'] = talib.EMA(inst_data['arr_close'], self.longperiod)
                 K, D = self.stoch_rsi(inst_data['arr_close'], k = 3, d = 3, period = 14)
                 inst_data['K'], inst_data['D'] = numpy.append(inst_data['K'], K), numpy.append(inst_data['D'], D)
                 
@@ -322,7 +324,7 @@ class AlgoEvent:
         
         
         # Use Short term MA same direction for ranging filters
-        fast, mid, slow = inst['arr_fastMA'], inst['arr_midMA'], inst['arr_slowMA']
+        fast, mid, slow, long = inst['arr_fastMA'], inst['arr_midMA'], inst['arr_slowMA'], inst['arr_longMA']
         all_MA_up, all_MA_down, MA_same_direction = False, False, False
         if len(fast) > 1 and len(mid) > 1 and len(slow) > 1:
             all_MA_up = fast[-1] > fast[-2] and mid[-1] > mid[-2] and slow[-1] > slow[-2]
@@ -352,9 +354,9 @@ class AlgoEvent:
         # Entry signal 2: stoch RSI crossover
         
         # Long Entry: K crossover D from below
-        long_stoch_rsi = inst['K'][-1] > inst['D'][-1] and inst['K'][-2] < inst['D'][-1]
+        long_stoch_rsi = inst['K'][-1] > inst['D'][-1] and inst['K'][-2] < inst['D'][-1] and mid[-1] > slow[-1] and slow[-1] > long[-1]
         # Short Entry: K crossover D from above
-        short_stoch_rsi = inst['K'][-1] < inst['D'][-1] and inst['K'][-2] > inst['D'][-2]
+        short_stoch_rsi = inst['K'][-1] < inst['D'][-1] and inst['K'][-2] > inst['D'][-2]  and mid[-1] < slow[-1] and slow[-1] < long[-1]
         
         
 
