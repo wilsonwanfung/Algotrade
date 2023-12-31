@@ -12,20 +12,17 @@ class AlgoEvent:
         self.ma_len = 20 # len of arrays of Moving Average
         self.rsi_len = 14 # len of window size in rsi calculation
         self.wait_time = self.ma_len # in days
-        self.arr_bbw = numpy.array([])
-        self.bbw_len = 1*30 # length of bbw, only set to 30 as too high will yield no sequeeze, may change
         self.arr_close_dict = {} # key to the corresponding arr_close
         self.inst_data = {} # for storing data of the instruments
         self.general_period = 14 # general period for indicator 
-        self.fastperiod = 5 #??
-        self.midperiod = 8 #??
-        self.slowperiod = 13 #??
-         
-         
-        self.squeezeThreshold_percentile = 0.1
-        self.risk_reward_ratio = 1.5 # take profit level : risk_reward_ratio * stoploss
-        self.stoploss_atrlen = 2 # width of atr for stoplsos
-        self.allocationratio_per_trade = 0.1
+        self.bb_sdwidth = 2
+        self.fastperiod = 5 
+        self.midperiod = 8
+        self.slowperiod = 13
+        self.squeezeThreshold_percentile = 0.2
+        self.risk_reward_ratio = 2.5 # take profit level : risk_reward_ratio * stoploss
+        self.stoploss_atrlen = 2.5 # width of atr for stoplsos
+        self.allocationratio_per_trade = 0.3
         
         self.openOrder = {} # existing open position for updating stoploss and checking direction
         self.netOrder = {} # existing net order
@@ -81,8 +78,8 @@ class AlgoEvent:
                 
                 sma = self.find_sma(inst_data['arr_close'], self.ma_len)
                 sd = numpy.std(inst_data['arr_close'])
-                inst_data['upper_bband'] = numpy.append(inst_data['upper_bband'], sma + 3*sd)
-                inst_data['lower_bband'] = numpy.append(inst_data['lower_bband'], sma - 3*sd)
+                inst_data['upper_bband'] = numpy.append(inst_data['upper_bband'], sma + self.bb_sdwidth*sd)
+                inst_data['lower_bband'] = numpy.append(inst_data['lower_bband'], sma - self.bb_sdwidth*sd)
                 inst_data['BB_width'] = inst_data['upper_bband'] - inst_data['lower_bband']
                 # Calculating indicator value
                 inst_data['atr'] = talib.ATR(inst_data['high_price'], inst_data['low_price'], inst_data['arr_close'], timeperiod = self.general_period)
@@ -99,10 +96,7 @@ class AlgoEvent:
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
                     self.update_stoploss(key, stoploss)
-                
-            # check if we have waited the initial peroid
-            if bd[self.myinstrument]['timestamp'] <= self.start_time + timedelta(days = self.wait_time):
-                return
+             
             
             # execute the trading strat for all instruments
             for key in bd:
@@ -170,16 +164,16 @@ class AlgoEvent:
         elif int(AROONOsc[-1]) > 0:
             AROON_positive = True
             
-        if (APO[-1] > 0) and (RSIFast[-1] > 50 or RSIFastRising or RSIGeneralRising) or (MACDRising or AROON_direction == 1 or AROON_positive):
+        if (APO[-1] > 0) or (RSIFast[-1] > 50 or RSIFastRising or RSIGeneralRising) or (MACDRising or AROON_direction == 1 or AROON_positive):
             return 1 # Bullish 
             
-        elif (APO[-1] < 0) and (RSIFast[-1] < 50 or not RSIFastRising or not RSIGeneralRising) and (not MACDRising or AROON_direction == -1 or not AROON_positive):
+        elif (APO[-1] < 0) or (RSIFast[-1] < 50 or not RSIFastRising or not RSIGeneralRising) or (not MACDRising or AROON_direction == -1 or not AROON_positive):
             return -1 # Bearish
         else:
             return 0 # Neutral
             
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi):
-        if (ADXR[-1] < 25) or abs(AROONOsc[-1]) < 30 or not MA_same_direction:
+        if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
             return True # ranging market
         else:
             return False
@@ -234,24 +228,22 @@ class AlgoEvent:
         
         bullish = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc)
         
-        if ranging:
-            return 0 
         
         # check for sell signal (price crosses upper bband and rsi > 70)
-        if not bullish:
-            if lastprice >= upper_bband and rsiGeneral[-1] > 70 or squeeze_breakout:
+        if bullish == -1:
+            if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging:
                 return -1
-            elif squeeze_breakdown:
+            elif squeeze_breakdown and not ranging:
                 return -2
-            elif short_stoch_rsi:
+            elif short_stoch_rsi and not ranging:
                 return -3 
         # check for buy signal (price crosses lower bband and rsi < 30)
-        if bullish:
-            if lastprice <= lower_bband and rsiGeneral[-1] < 30:
+        elif bullish == 1:
+            if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging:
                 return 1
-            elif squeeze_breakout:
+            elif squeeze_breakout and not ranging:
                 return 2
-            elif long_stoch_rsi:
+            elif long_stoch_rsi and not ranging:
                 return 3
         # no signal
         return 0 
@@ -285,13 +277,17 @@ class AlgoEvent:
             takeprofit = (inst['upper_bband'][-1] + inst['lower_bband'][-1])/2 # use the middle band as take profit
         elif inst['entry_signal'] == 2 or 3 or -2 or -3:
             takeprofit = self.risk_reward_ratio * stoploss
-      
-        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice),  bd[key]['instrument'] )
+        
+        if key in self.openOrder and self.openOrder[key][buysell] != direction and self.openOrder[instrument]['orderRef'] == abs(inst['entry_signal']):
+            # if current position exist in open order as well as opposite direction and same trading signal, close the order
+            self.closeAllOrder(instrument, self.openOrder[instrument][orderRef])
+            
+        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice), key, inst['entry_signal'] )
                 
         self.evt.consoleLog("Executed strat")
         self.evt.consoleLog("---------------------------------")
 
-    def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument):
+    def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument, orderRef):
         order = AlgoAPIUtil.OrderObject()
         order.instrument = instrument
         order.orderRef = 1
@@ -318,6 +314,18 @@ class AlgoEvent:
         K = K.iloc[-1].iloc[0]
         return K, D 
         # K and D are returned as a value
+    
+    def closeAllOrder(self, instrument, orderRef):
+        if not self.openOrder:
+            return False
+        for ID in self.openOrder:
+            if self.openOrder[ID]['instrument'] == instrument and self.openOrder[ID]['orderRef'] == orderRef:
+                order = AlgoAPIUtil.OrderObject(
+                    tradeID = ID,
+                    openclose = 'close',
+                )
+                self.evt.sendOrder(order)
+        return True
         
     # ATR trailing stop implementation
     def update_stoploss(self, instrument, new_stoploss):
