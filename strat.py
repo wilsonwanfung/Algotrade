@@ -54,6 +54,8 @@ class AlgoEvent:
                     'K': numpy.array([]), # Stoch rsi K
                     'D': numpy.array([]), # Stoch rsi D
                     'entry_signal': 0,
+                    'score1': 0, # higher better
+                    'score2_3': 0 # higher better
                 }
                 
                 
@@ -61,6 +63,7 @@ class AlgoEvent:
         if bd[self.myinstrument]['timestamp'] >= self.lasttradetime + timedelta(hours=24):
             # update inst_data's arr close, highprice and lowprice, and MA lines
             self.lasttradetime = bd[self.myinstrument]['timestamp']
+            
             for key in bd:
                 inst_data = self.inst_data[key]
                 
@@ -93,7 +96,9 @@ class AlgoEvent:
                 
                 
                 inst_data['entry_signal'] = self.get_entry_signal(inst_data)
-                #self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
+                
+                self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
+                
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
                     self.update_stoploss(key, stoploss)
@@ -106,9 +111,9 @@ class AlgoEvent:
                 
                 #self.evt.consoleLog(f"upper_bband: {inst_data['upper_bband']}")
                 #self.evt.consoleLog(f"lower_bband: {inst_data['lower_bband']}")
-                #self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
+                self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
                 
-                #self.evt.consoleLog(f"atr: {inst_data['atr']}")
+                self.evt.consoleLog(f"atr: {inst_data['atr']}")
                 
                 #self.evt.consoleLog(f"arr_fastMA: {inst_data['arr_fastMA']}")
                 #self.evt.consoleLog(f"arr_midMA: {inst_data['arr_midMA']}")
@@ -117,6 +122,11 @@ class AlgoEvent:
                 #self.evt.consoleLog(f"K: {inst_data['K']}")
                 #self.evt.consoleLog(f"D: {inst_data['D']}")
                 
+            # ranking for signal 2 and 3 based on BBW (favours less BBW)
+            # get scores for ranking
+            self.get_score2_3(bd, self.inst_data)
+            # sort self.inst_data by least BBW
+            
             
             # execute the trading strat for all instruments
             for key in bd:
@@ -198,7 +208,23 @@ class AlgoEvent:
         else:
             return False
     
-    
+    # get score1 for all instruments for ranking
+    def get_score2_3(self, bd, inst_data):
+        # we use bbw as score, the less the better
+        # loop once to get the min. bbw among all instruments
+        min_bbw = 1000000000
+        max_bbw = 0
+        for key in bd:
+            min_bbw = min(min_bbw, inst_data[key]["BB_width"][-1])
+            max_bbw = max(max_bbw, inst_data[key]["BB_width"][-1])
+        
+        # assign score for each instruments
+        for key in bd:
+            inst_data[key]["score2_3"] = (max_bbw - inst_data[key]["BB_width"][-1])/ (max_bbw-min_bbw)
+            self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}") 
+
+        
+        
     def get_entry_signal(self, inst_data):
         inst = inst_data
         arr_close = inst['arr_close']
