@@ -177,7 +177,7 @@ class AlgoEvent:
                     self.temp_traded_dict["ZeroDay"].append(key)
                     trade_1 += 1
             
-            self.no_of_trade_today = trade_1+ trade_2_3
+            self.no_of_trade_today = max(trade_1+ trade_2_3, 1)
                 
             
             
