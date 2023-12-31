@@ -263,11 +263,13 @@ class AlgoEvent:
         
         inst =  self.inst_data[key]
         lastprice =  inst['arr_close'][-1]
+        # set direction, ie decide if buy or sell, based on entry signal
         direction = 1
         if inst['entry_signal'] > 0:
             direction = 1 #long
-        else:
-            direction -1 #short
+        elif inst['entry_singal'] < 0:
+            direction = -1 #short
+            
         # caclulate the rsi
         
         atr =  inst['atr'][-1]
