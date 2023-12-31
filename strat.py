@@ -259,12 +259,12 @@ class AlgoEvent:
         
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi, stream):
         if stream == 2 or stream == 3:
-            if (ADXR[-1] < 20) and abs(AROONOsc[-1]) < 25 and not MA_same_direction:
+            if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
                 return True # ranging market
             else:
                 return False
         if stream == 1:
-            if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
+            if (ADXR[-1] < 30) and abs(AROONOsc[-1]) < 50 and not MA_same_direction:
                 return True # ranging market
             else:
                 return False
@@ -402,18 +402,18 @@ class AlgoEvent:
         # check for buy
         if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging1 and bullish1 == -1:
                 return -1
-        if squeeze_breakdown and not ranging2 and bullish2_3 == -1:
+        if squeeze_breakdown and not ranging2_3 and bullish2_3 == -1:
             return -2
-        if short_stoch_rsi and not ranging2 and bullish2_3 == -1:
+        if short_stoch_rsi and not ranging2_3 and bullish2_3 == -1:
             return -3 
         
         #check for sell
         if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging1 and bullish1 == 1:
             #self.evt.consoleLog("bb + rsi strat buy signal")
             return 1
-        if squeeze_breakout and not ranging2 and bullish2_3 == 1:
+        if squeeze_breakout and not ranging2_3 and bullish2_3 == 1:
             return 2
-        if long_stoch_rsi and not ranging2 and bullish2_3 == 1:
+        if long_stoch_rsi and not ranging2_3 and bullish2_3 == 1:
             return 3
             
         # no signal
