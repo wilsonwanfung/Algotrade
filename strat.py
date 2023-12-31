@@ -6,6 +6,7 @@ import pandas as pd
 
 class AlgoEvent:
     def __init__(self):
+        
         self.lasttradetime = datetime(2000,1,1)
         self.start_time = None # the starting time of the trading
         self.ma_len = 20 # len of arrays of Moving Average
@@ -28,6 +29,8 @@ class AlgoEvent:
         
         self.sorted_score1_list = [] # sorted list of (key, score1) in decreasing order
         self.sorted_score2_3_list = [] # sorted list of (key, score2_3) in decreasing order
+        
+        self.temp_traded_dict = {"ZeroDay": [], "OneDay": [], "TwoDay": []} 
 
     def start(self, mEvt):
         self.myinstrument = mEvt['subscribeList'][0]
@@ -40,6 +43,9 @@ class AlgoEvent:
         if not isSync:
             return
         if not self.start_time:
+            self.evt.consoleLog(f"start")
+            
+            
             self.start_time = bd[self.myinstrument]['timestamp']
             for key in bd:
                 self.inst_data[key] = {
@@ -131,18 +137,39 @@ class AlgoEvent:
             self.get_scores(bd, self.inst_data)
             self.get_sorted_score_lists(bd, self.inst_data)
             
-            executed_inst_list = []
+            # update temp_traded_dict
+            self.temp_traded_strat["OneDay"] = self.temp_traded_strat["ZeroDay"]
+            self.temp_traded_strat["TwoDay"] = self.temp_traded_strat["OneDay"]
+            self.temp_traded_strat["ZeroDay"] = []
             
+            
+            
+            number_of_trades = 3
             # execute trading strat based on score2_3 (non-ranging market)
             for (key, score2_3) in self.sorted_score2_3_list:
+                # check if recently traded
+                if key in self.temp_traded_strat.["OneDay"] or key in self.temp_traded_strat.["TwoDay"] or key in self.temp_traded_strat.["ZeroDay"]:
+                    return
+                
+                if number_of_trades == 0:
+                    return
                 if self.inst_data[key]['entry_signal'] in [-3,-2,2,3]:
                     self.execute_strat(bd, key)
-                    executed_inst_list.append(bd)
+                    self.temp_traded_dict["ZeroDay"].append(key)
+                    number_of_trades -= 1
                     
             # execute the trading strat based on score1 (ranging market), but exclude those that excuted b4
             for (key, score1) in self.sorted_score1_list:
+                # check if recently traded
+                if key in self.temp_traded_strat.["OneDay"] or key in self.temp_traded_strat.["TwoDay"] or key in self.temp_traded_strat.["ZeroDay"]:
+                    return
+                
+                if number_of_trades == 0:
+                    return
                 if self.inst_data[key]['entry_signal'] in [-1,1] and key not in executed_inst_list:
                     self.execute_strat(bd, key)
+                    number_of_trades -= 1
+                    self.temp_traded_strat.["ZeroDay"].append(key)
                 
             
             
@@ -214,28 +241,18 @@ class AlgoEvent:
         else:
             return 0 # Neutral
             
+    def testrangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi): 
+        score = 0
+        score += (100-ADXR[-1])/100
+        score *= (100 - abs(AROONOsc[-1]))/100
+        return score >= 0.3
+        
+
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi):
         if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
             return True # ranging market
         else:
             return False
-    
-    """
-    # get score2_3 (non rangeing) for all instruments for ranking
-    def get_score2_3(self, bd, inst_data):
-        # we use bbw as score, the less the better
-        # loop once to get the min. bbw among all instruments
-        min_bbw = 1000000000
-        max_bbw = 0
-        for key in bd:
-            min_bbw = min(min_bbw, inst_data[key]["BB_width"][-1])
-            max_bbw = max(max_bbw, inst_data[key]["BB_width"][-1])
-        
-        # assign score for each instruments
-        for key in bd:
-            inst_data[key]["score2_3"] = (max_bbw - inst_data[key]["BB_width"][-1])/ (max_bbw-min_bbw)
-            #self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}") 
-    """
     
     
     # get score1 (ranging market) and score2_3 for all instruments
@@ -280,8 +297,8 @@ class AlgoEvent:
         #self.evt.consoleLog(f"sorted list2_3: {sorted_list}") # debug
         
         # cut down the len
-        new_len = min((len(sorted_list)-1 ) // 2, 5)
-        sorted_list = sorted_list[0:new_len:]
+        #new_len = min((len(sorted_list)-1 ) // 2, 3)
+        #sorted_list = sorted_list[0:new_len:]
         #self.evt.consoleLog(f"sorted list2_3: {sorted_list}") 
         
         self.sorted_score2_3_list = sorted_list
@@ -298,7 +315,7 @@ class AlgoEvent:
         #self.evt.consoleLog(f"sorted list1: {sorted_list}") # debug
         
         # cut down the len
-        new_len = min((len(sorted_list)-1 ) // 2, 5)
+        new_len = min((len(sorted_list)-1 ) // 2, 3)
         sorted_list = sorted_list[0:new_len:]
         #self.evt.consoleLog(f"sorted list1: {sorted_list}") 
         
@@ -368,7 +385,7 @@ class AlgoEvent:
         # check for sell signal 
         if bullish == -1:
             if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging:
-                self.evt.consoleLog("bb + rsi strat sell signal")
+                #self.evt.consoleLog("bb + rsi strat sell signal")
                 return -1
             elif squeeze_breakdown and not ranging:
                 return -2
@@ -377,7 +394,7 @@ class AlgoEvent:
         # check for buy signal
         elif bullish == 1:
             if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging:
-                self.evt.consoleLog("bb + rsi strat buy signal")
+                #self.evt.consoleLog("bb + rsi strat buy signal")
                 return 1
             elif squeeze_breakout and not ranging:
                 return 2
