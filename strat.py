@@ -93,10 +93,30 @@ class AlgoEvent:
                 
                 
                 inst_data['entry_signal'] = self.get_entry_signal(inst_data)
+                self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
                     self.update_stoploss(key, stoploss)
-             
+                
+                
+                # test
+                #self.evt.consoleLog(f"high price (len of {len(inst_data['high_price'])}): {inst_data['high_price']}")
+                #self.evt.consoleLog(f"arr_close: {inst_data['arr_close']}")
+                #self.evt.consoleLog(f"low_price: {inst_data['low_price']}")
+                
+                self.evt.consoleLog(f"upper_bband: {inst_data['upper_bband']}")
+                self.evt.consoleLog(f"lower_bband: {inst_data['lower_bband']}")
+                self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
+                
+                #self.evt.consoleLog(f"atr: {inst_data['atr']}")
+                
+                #self.evt.consoleLog(f"arr_fastMA: {inst_data['arr_fastMA']}")
+                #self.evt.consoleLog(f"arr_midMA: {inst_data['arr_midMA']}")
+                #self.evt.consoleLog(f"arr_slowMA: {inst_data['arr_slowMA']}")
+                
+                #self.evt.consoleLog(f"K: {inst_data['K']}")
+                #self.evt.consoleLog(f"D: {inst_data['D']}")
+                
             
             # execute the trading strat for all instruments
             for key in bd:
@@ -204,13 +224,22 @@ class AlgoEvent:
             
         # ranging filter (to confirm moving sideway)
         adxr = talib.ADXR(inst['high_price'], inst['low_price'], inst['arr_close'], 
-            timeperiod=self.general_period)
+            timeperiod=self.general_period-1)
+            
         apo = talib.APO(inst['arr_close'], self.midperiod, self.slowperiod)
         macd, signal, hist = talib.MACD(inst['arr_close'], self.fastperiod, self.slowperiod, self.midperiod)
         rsiFast, rsiGeneral = talib.RSI(inst['arr_close'], self.fastperiod), talib.RSI(inst['arr_close'], self.general_period)       
         # Calculate Aroon values
         aroon_up, aroon_down = talib.AROON(inst['high_price'], inst['low_price'], timeperiod=self.general_period)
         aroonosc = aroon_up - aroon_down
+        
+        self.evt.consoleLog(f"adxr {adxr}") #adxr is an array of all nan, bug
+        self.evt.consoleLog(f"apo {apo}") 
+        self.evt.consoleLog(f"macd {macd}") 
+        self.evt.consoleLog(f"signal {signal}") 
+        self.evt.consoleLog(f"hist {hist}") 
+        self.evt.consoleLog(f"aroon_up {aroon_up}") 
+        self.evt.consoleLog(f"aroon_down {aroon_down}") 
         
         
         # Entry signal 2: stoch RSI crossover
@@ -229,17 +258,19 @@ class AlgoEvent:
         bullish = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc)
         
         
-        # check for sell signal (price crosses upper bband and rsi > 70)
+        # check for sell signal 
         if bullish == -1:
             if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging:
+                self.evt.consoleLog("bb + rsi strat sell signal")
                 return -1
             elif squeeze_breakdown and not ranging:
                 return -2
             elif short_stoch_rsi and not ranging:
                 return -3 
-        # check for buy signal (price crosses lower bband and rsi < 30)
+        # check for buy signal
         elif bullish == 1:
             if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging:
+                self.evt.consoleLog("bb + rsi strat buy signal")
                 return 1
             elif squeeze_breakout and not ranging:
                 return 2
@@ -263,14 +294,14 @@ class AlgoEvent:
         
         inst =  self.inst_data[key]
         lastprice =  inst['arr_close'][-1]
+        
         # set direction, ie decide if buy or sell, based on entry signal
         direction = 1
         if inst['entry_signal'] > 0:
             direction = 1 #long
         elif inst['entry_singal'] < 0:
             direction = -1 #short
-            
-        # caclulate the rsi
+        
         
         atr =  inst['atr'][-1]
         stoploss = self.stoploss_atrlen * atr
@@ -288,6 +319,7 @@ class AlgoEvent:
                 
         self.evt.consoleLog("Executed strat")
         self.evt.consoleLog("---------------------------------")
+
 
     def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument, orderRef):
         order = AlgoAPIUtil.OrderObject()
