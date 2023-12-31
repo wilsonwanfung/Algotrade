@@ -114,7 +114,7 @@ class AlgoEvent:
                 #self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
                 
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
-                if key in self.openOrder:
+                if self.openOrder:
                     self.update_stoploss(key, stoploss)
                 
                 
