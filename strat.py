@@ -164,9 +164,8 @@ class AlgoEvent:
                 if key in self.temp_traded_dict["OneDay"] or key in self.temp_traded_dict["TwoDay"] or key in self.temp_traded_dict["ZeroDay"]:
                     return
                 
-                if self.inst_data[key]['entry_signal'] in [-1,1] and key not in executed_inst_list:
+                if self.inst_data[key]['entry_signal'] in [-1,1]:
                     self.execute_strat(bd, key)
-                    number_of_trades -= 1
                     self.temp_traded_dict["ZeroDay"].append(key)
                     break # only trade once
                 
@@ -246,12 +245,18 @@ class AlgoEvent:
         score *= (100 - abs(AROONOsc[-1]))/100
         return score >= 0.3
         
-
-    def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi):
-        if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
-            return True # ranging market
-        else:
-            return False
+    def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi, stream):
+        if stream == 2 or stream == 3:
+            if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
+                return True # ranging market
+            else:
+                return False
+        if stream == 1:
+            if (ADXR[-1] < 30) and abs(AROONOsc[-1]) < 50 and not MA_same_direction:
+                return True # ranging market
+            else:
+                return False
+            
     
     
     # get score1 (ranging market) and score2_3 for all instruments
@@ -376,28 +381,29 @@ class AlgoEvent:
 
         # TODO:  classify the different type of entry signal and set take profit/ stop loss accordingly
         
-        ranging = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral)
+        ranging1 = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral, 1)
+        ranging2_3 = self.rangingFilter(adxr, aroonosc, MA_same_direction, rsiGeneral, 2)
         
         bullish = self.momentumFilter(apo, macd, rsiFast, rsiGeneral, aroonosc)
         
         
         # check for sell signal 
         if bullish == -1:
-            if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging:
+            if lastprice >= upper_bband and rsiGeneral[-1] > 70 and ranging1:
                 #self.evt.consoleLog("bb + rsi strat sell signal")
                 return -1
-            elif squeeze_breakdown and not ranging:
+            elif squeeze_breakdown and not ranging2:
                 return -2
-            elif short_stoch_rsi and not ranging:
+            elif short_stoch_rsi and not ranging2:
                 return -3 
         # check for buy signal
         elif bullish == 1:
-            if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging:
+            if lastprice <= lower_bband and rsiGeneral[-1] < 30 and ranging1:
                 #self.evt.consoleLog("bb + rsi strat buy signal")
                 return 1
-            elif squeeze_breakout and not ranging:
+            elif squeeze_breakout and not ranging2:
                 return 2
-            elif long_stoch_rsi and not ranging:
+            elif long_stoch_rsi and not ranging2:
                 return 3
         # no signal
         return 0 
