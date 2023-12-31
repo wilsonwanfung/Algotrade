@@ -69,6 +69,7 @@ class AlgoEvent:
                     'score1': 0, # higher better
                     'score2_3': 0 # higher better
                 }
+            self.no_of_inst = len(bd.keys())
                 
                 
         # check if it is decision time
@@ -462,7 +463,7 @@ class AlgoEvent:
             # if current position exist in open order as well as opposite direction and same trading signal, close the order
             self.closeAllOrder(instrument, self.openOrder[instrument][orderRef])
             
-        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice), key, inst['entry_signal'] )
+        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, (1/self.no_of_inst)* self.find_positionSize(lastprice), key, inst['entry_signal'] )
                 
         #self.evt.consoleLog("Executed strat")
         #self.evt.consoleLog("---------------------------------")
