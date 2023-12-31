@@ -40,8 +40,7 @@ class AlgoEvent:
 
     def on_bulkdatafeed(self, isSync, bd, ab):
         # set start time and inst_data in bd on the first call of this function
-        if not isSync:
-            return
+       
         if not self.start_time:
             self.evt.consoleLog(f"start")
             
@@ -138,38 +137,33 @@ class AlgoEvent:
             self.get_sorted_score_lists(bd, self.inst_data)
             
             # update temp_traded_dict
-            self.temp_traded_strat["OneDay"] = self.temp_traded_strat["ZeroDay"]
-            self.temp_traded_strat["TwoDay"] = self.temp_traded_strat["OneDay"]
-            self.temp_traded_strat["ZeroDay"] = []
+            self.temp_traded_dict["OneDay"] = self.temp_traded_dict["ZeroDay"]
+            self.temp_traded_dict["TwoDay"] = self.temp_traded_dict["OneDay"]
+            self.temp_traded_dict["ZeroDay"] = []
             
             
-            
-            number_of_trades = 3
             # execute trading strat based on score2_3 (non-ranging market)
             for (key, score2_3) in self.sorted_score2_3_list:
                 # check if recently traded
-                if key in self.temp_traded_strat.["OneDay"] or key in self.temp_traded_strat.["TwoDay"] or key in self.temp_traded_strat.["ZeroDay"]:
+                if key in self.temp_traded_dict["OneDay"] or key in self.temp_traded_dict["TwoDay"] or key in self.temp_traded_dict["ZeroDay"]:
                     return
                 
-                if number_of_trades == 0:
-                    return
                 if self.inst_data[key]['entry_signal'] in [-3,-2,2,3]:
                     self.execute_strat(bd, key)
                     self.temp_traded_dict["ZeroDay"].append(key)
-                    number_of_trades -= 1
+                    break # only trade once
                     
             # execute the trading strat based on score1 (ranging market), but exclude those that excuted b4
             for (key, score1) in self.sorted_score1_list:
                 # check if recently traded
-                if key in self.temp_traded_strat.["OneDay"] or key in self.temp_traded_strat.["TwoDay"] or key in self.temp_traded_strat.["ZeroDay"]:
+                if key in self.temp_traded_dict["OneDay"] or key in self.temp_traded_dict["TwoDay"] or key in self.temp_traded_dict["ZeroDay"]:
                     return
                 
-                if number_of_trades == 0:
-                    return
                 if self.inst_data[key]['entry_signal'] in [-1,1] and key not in executed_inst_list:
                     self.execute_strat(bd, key)
                     number_of_trades -= 1
-                    self.temp_traded_strat.["ZeroDay"].append(key)
+                    self.temp_traded_dict["ZeroDay"].append(key)
+                    break # only trade once
                 
             
             
