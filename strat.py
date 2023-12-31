@@ -93,7 +93,7 @@ class AlgoEvent:
                 
                 
                 inst_data['entry_signal'] = self.get_entry_signal(inst_data)
-                self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
+                #self.evt.consoleLog(f"entry singal: {inst_data['entry_signal']}")
                 stoploss = inst_data['atr'][-1] * self.stoploss_atrlen
                 if key in self.openOrder:
                     self.update_stoploss(key, stoploss)
@@ -104,9 +104,9 @@ class AlgoEvent:
                 #self.evt.consoleLog(f"arr_close: {inst_data['arr_close']}")
                 #self.evt.consoleLog(f"low_price: {inst_data['low_price']}")
                 
-                self.evt.consoleLog(f"upper_bband: {inst_data['upper_bband']}")
-                self.evt.consoleLog(f"lower_bband: {inst_data['lower_bband']}")
-                self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
+                #self.evt.consoleLog(f"upper_bband: {inst_data['upper_bband']}")
+                #self.evt.consoleLog(f"lower_bband: {inst_data['lower_bband']}")
+                #self.evt.consoleLog(f"BB_width: {inst_data['BB_width']}")
                 
                 #self.evt.consoleLog(f"atr: {inst_data['atr']}")
                 
@@ -198,6 +198,7 @@ class AlgoEvent:
         else:
             return False
     
+    
     def get_entry_signal(self, inst_data):
         inst = inst_data
         arr_close = inst['arr_close']
@@ -233,13 +234,13 @@ class AlgoEvent:
         aroon_up, aroon_down = talib.AROON(inst['high_price'], inst['low_price'], timeperiod=self.general_period)
         aroonosc = aroon_up - aroon_down
         
-        self.evt.consoleLog(f"adxr {adxr}") #adxr is an array of all nan, bug
-        self.evt.consoleLog(f"apo {apo}") 
-        self.evt.consoleLog(f"macd {macd}") 
-        self.evt.consoleLog(f"signal {signal}") 
-        self.evt.consoleLog(f"hist {hist}") 
-        self.evt.consoleLog(f"aroon_up {aroon_up}") 
-        self.evt.consoleLog(f"aroon_down {aroon_down}") 
+        #self.evt.consoleLog(f"adxr {adxr}") #adxr is an array of all nan, bug
+        #self.evt.consoleLog(f"apo {apo}") 
+        #self.evt.consoleLog(f"macd {macd}") 
+        #self.evt.consoleLog(f"signal {signal}") 
+        #self.evt.consoleLog(f"hist {hist}") 
+        #self.evt.consoleLog(f"aroon_up {aroon_up}") 
+        #self.evt.consoleLog(f"aroon_down {aroon_down}") 
         
         
         # Entry signal 2: stoch RSI crossover
@@ -282,11 +283,11 @@ class AlgoEvent:
         
     # execute the trading strat for one instructment given the key and bd       
     def execute_strat(self, bd, key):
-        self.evt.consoleLog("---------------------------------")
-        self.evt.consoleLog("Executing strat")
+        #self.evt.consoleLog("---------------------------------")
+        #self.evt.consoleLog("Executing strat")
 
         # debug
-        self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
+        #self.evt.consoleLog(f"name of instrument: { bd[key]['instrument'] }")
         #self.evt.consoleLog(f"datetime: {bd[self.myinstrument]['timestamp']}")
         #self.evt.consoleLog(f"upper: {upper_bband}")
         #self.evt.consoleLog(f"lower: {lower_bband}")
@@ -317,8 +318,8 @@ class AlgoEvent:
             
         self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, self.find_positionSize(lastprice), key, inst['entry_signal'] )
                 
-        self.evt.consoleLog("Executed strat")
-        self.evt.consoleLog("---------------------------------")
+        #self.evt.consoleLog("Executed strat")
+        #self.evt.consoleLog("---------------------------------")
 
 
     def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument, orderRef):
@@ -360,6 +361,7 @@ class AlgoEvent:
                 )
                 self.evt.sendOrder(order)
         return True
+        
         
     # ATR trailing stop implementation
     def update_stoploss(self, instrument, new_stoploss):
