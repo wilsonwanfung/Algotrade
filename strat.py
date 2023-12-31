@@ -247,12 +247,12 @@ class AlgoEvent:
         
     def rangingFilter(self, ADXR, AROONOsc, MA_same_direction, rsi, stream):
         if stream == 2 or stream == 3:
-            if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
+            if (ADXR[-1] < 20) and abs(AROONOsc[-1]) < 25 and not MA_same_direction:
                 return True # ranging market
             else:
                 return False
         if stream == 1:
-            if (ADXR[-1] < 30) and abs(AROONOsc[-1]) < 50 and not MA_same_direction:
+            if (ADXR[-1] < 30) or abs(AROONOsc[-1]) < 50 or not MA_same_direction:
                 return True # ranging market
             else:
                 return False
