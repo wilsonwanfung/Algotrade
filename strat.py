@@ -176,6 +176,8 @@ class AlgoEvent:
                     self.execute_strat(bd, key)
                     self.temp_traded_dict["ZeroDay"].append(key)
                     trade_1 += 1
+            
+            self.no_of_trade_today = trade_1+ trade_2_3
                 
             
             
@@ -463,7 +465,7 @@ class AlgoEvent:
             # if current position exist in open order as well as opposite direction and same trading signal, close the order
             self.closeAllOrder(instrument, self.openOrder[instrument][orderRef])
             
-        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, (1/self.no_of_inst)* self.find_positionSize(lastprice), key, inst['entry_signal'] )
+        self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, (4/self.no_of_trade_today)* self.find_positionSize(lastprice), key, inst['entry_signal'] )
                 
         #self.evt.consoleLog("Executed strat")
         #self.evt.consoleLog("---------------------------------")
