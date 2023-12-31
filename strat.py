@@ -25,6 +25,9 @@ class AlgoEvent:
         
         self.openOrder = {} # existing open position for updating stoploss and checking direction
         self.netOrder = {} # existing net order
+        
+        self.sorted_score1_list = [] # sorted list of (key, score1) in decreasing order
+        self.sorted_score2_3_list = [] # sorted list of (key, score2_3) in decreasing order
 
     def start(self, mEvt):
         self.myinstrument = mEvt['subscribeList'][0]
@@ -53,6 +56,7 @@ class AlgoEvent:
                     'K': numpy.array([]), # Stoch rsi K
                     'D': numpy.array([]), # Stoch rsi D
                     'entry_signal': 0,
+                    
                     'score1': 0, # higher better
                     'score2_3': 0 # higher better
                 }
@@ -123,39 +127,23 @@ class AlgoEvent:
                 
             # ranking for signal 2 and 3 based on BBW (favours less BBW)
             # get scores for ranking
-            self.get_score2_3(bd, self.inst_data)
-            # sorting
-            sorted_list = []
-            for key in bd:
-                score2_3 = self.inst_data[key]["score2_3"]
-                if numpy.isnan(score2_3):
-                    continue
-                sorted_list.append((key, score2_3))
-            sorted_list = sorted(sorted_list, key=lambda tup: tup[1])
-            sorted_list.reverse()
-            #self.evt.consoleLog(f"sorted list: {sorted_list}")
+            #self.get_score2_3(bd, self.inst_data)
+            self.get_scores(bd, self.inst_data)
+            self.get_sorted_score_lists(bd, self.inst_data)
             
-            # cut down the len
-            new_len = min((len(sorted_list)-1 ) // 2, 5)
-            sorted_list = sorted_list[0:new_len:]
-            #self.evt.consoleLog(f"sorted list: {sorted_list}")
+            executed_inst_list = []
             
-            
-            # execute trading strat of signal 2, 3 based on the scores
-            for (key, score2_3) in sorted_list:
+            # execute trading strat based on score2_3 (non-ranging market)
+            for (key, score2_3) in self.sorted_score2_3_list:
                 if self.inst_data[key]['entry_signal'] in [-3,-2,2,3]:
                     self.execute_strat(bd, key)
-         
-            
-            
-            
-            
-            # execute the trading strat for all instruments
-            """
-            for key in bd:
-                if self.inst_data[key]['entry_signal'] != 0:
+                    executed_inst_list.append(bd)
+                    
+            # execute the trading strat based on score1 (ranging market), but exclude those that excuted b4
+            for (key, score1) in self.sorted_score1_list:
+                if self.inst_data[key]['entry_signal'] in [-1,1] and key not in executed_inst_list:
                     self.execute_strat(bd, key)
-            """
+                
             
             
     def on_marketdatafeed(self, md, ab):
@@ -232,7 +220,8 @@ class AlgoEvent:
         else:
             return False
     
-    # get score1 for all instruments for ranking
+    """
+    # get score2_3 (non rangeing) for all instruments for ranking
     def get_score2_3(self, bd, inst_data):
         # we use bbw as score, the less the better
         # loop once to get the min. bbw among all instruments
@@ -246,7 +235,74 @@ class AlgoEvent:
         for key in bd:
             inst_data[key]["score2_3"] = (max_bbw - inst_data[key]["BB_width"][-1])/ (max_bbw-min_bbw)
             #self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}") 
-
+    """
+    
+    
+    # get score1 (ranging market) and score2_3 for all instruments
+    def get_scores(self, bd, inst_data):
+        # loop once to get the min, max bbw and atr among all instrument
+        min_atr, min_bbw = 1000000000, 1000000000
+        max_atr, max_bbw = 0, 0
+        for key in bd:
+            min_bbw = min(min_bbw, inst_data[key]["BB_width"][-1])
+            min_atr = min(min_atr, inst_data[key]["atr"][-1])
+            
+            max_bbw = max(max_bbw, inst_data[key]["BB_width"][-1])
+            max_atr = max(max_atr, inst_data[key]["atr"][-1])
+        
+        # assign score1, and score2_3 for each instruments
+        for key in bd:
+            # score2_3
+            inst_data[key]["score2_3"] = (max_bbw - inst_data[key]["BB_width"][-1])/ (max_bbw-min_bbw) # in [0,1]
+            # score1 (bbw part) 
+            inst_data[key]['score1'] = (inst_data[key]["BB_width"][-1] - min_bbw) / (max_bbw-min_bbw) # in [0,1]
+            # score1 (atr part)
+            if not numpy.isnan(inst_data[key]["atr"][-1]):
+                inst_data[key]["score1"] += (max_atr - inst_data[key]["atr"][-1])/ (max_atr-min_atr) # in [0,2]
+            # score1 normalize 
+            inst_data[key]['score1'] /= 2 # in [0,1]
+            
+            #debug
+            #self.evt.consoleLog(f"score1 {inst_data[key]['score1']}")
+            #self.evt.consoleLog(f"score2_3 {inst_data[key]['score2_3']}")
+    
+    
+    def get_sorted_score_lists(self, bd, inst_data):
+        # sorting for self.sorted_score2_3_list
+        sorted_list = []
+        for key in bd:
+            score2_3 = self.inst_data[key]["score2_3"]
+            if numpy.isnan(score2_3):
+                continue
+            sorted_list.append((key, score2_3))
+        sorted_list = sorted(sorted_list, key=lambda tup: tup[1])
+        sorted_list.reverse()
+        #self.evt.consoleLog(f"sorted list2_3: {sorted_list}") # debug
+        
+        # cut down the len
+        new_len = min((len(sorted_list)-1 ) // 2, 5)
+        sorted_list = sorted_list[0:new_len:]
+        #self.evt.consoleLog(f"sorted list2_3: {sorted_list}") 
+        
+        self.sorted_score2_3_list = sorted_list
+        
+        # sorting for self.sorted_score1_list
+        sorted_list = []
+        for key in bd:
+            score1 = self.inst_data[key]["score1"]
+            if numpy.isnan(score1):
+                continue
+            sorted_list.append((key, score1))
+        sorted_list = sorted(sorted_list, key=lambda tup: tup[1])
+        sorted_list.reverse()
+        #self.evt.consoleLog(f"sorted list1: {sorted_list}") # debug
+        
+        # cut down the len
+        new_len = min((len(sorted_list)-1 ) // 2, 5)
+        sorted_list = sorted_list[0:new_len:]
+        #self.evt.consoleLog(f"sorted list1: {sorted_list}") 
+        
+        self.sorted_score1_list = sorted_list
         
         
     def get_entry_signal(self, inst_data):
@@ -329,7 +385,7 @@ class AlgoEvent:
                 return 3
         # no signal
         return 0 
-      
+     
         
     # execute the trading strat for one instructment given the key and bd       
     def execute_strat(self, bd, key):
