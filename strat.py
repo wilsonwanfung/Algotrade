@@ -431,7 +431,7 @@ class AlgoEvent:
     def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument, orderRef):
         order = AlgoAPIUtil.OrderObject()
         order.instrument = instrument
-        order.orderRef = 1
+        order.orderRef = orderRef
         if buysell==1:
             order.takeProfitLevel = lastprice + takeprofit
             order.stopLossLevel = lastprice - stoploss 
