@@ -23,7 +23,9 @@ class AlgoEvent:
         self.risk_reward_ratio = 2.5 # take profit level : risk_reward_ratio * stoploss
         self.stoploss_atrlen = 2.5 # width of atr for stoplsos
         self.allocationratio_per_trade = 0.3
-        
+
+        self.risk_limit_portfolio = 0.2
+        self.cooldown = 10
         self.openOrder = {} # existing open position for updating stoploss and checking direction
         self.netOrder = {} # existing net order
         
@@ -33,6 +35,7 @@ class AlgoEvent:
     def start(self, mEvt):
         self.myinstrument = mEvt['subscribeList'][0]
         self.evt = AlgoAPI_Backtest.AlgoEvtHandler(self, mEvt)
+        self.evt.update_portfolio_sl(sl=self.risk_limit_portfolio, resume_after=60*60*24*self.cooldown)
         self.evt.start()
 
 
