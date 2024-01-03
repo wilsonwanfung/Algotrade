@@ -435,7 +435,7 @@ class AlgoEvent:
         
         inst = self.inst_data[key]
         lastprice =  inst['arr_close'][-1]
-        position_size = self.allocate_capital( self.calculate_strategy_returns(inst['arr_close']) )
+        position_size = self.allocate_capital( self.calculate_net_returns(inst['arr_close']), key )
         # set direction, ie decide if buy or sell, based on entry signal
         direction = 1
         if inst['entry_signal'] > 0:
@@ -458,20 +458,25 @@ class AlgoEvent:
             
         self.test_sendOrder(lastprice, direction, 'open', stoploss, takeprofit, position_size, key, inst['entry_signal'] )
         
-    def calculate_strategy_returns(self, prices):
-        returns = []
+    def calculate_net_returns(self, prices):
+        net_returns = 0
         for i in range(1, len(prices)):
-            daily_return = (prices[i] - prices[i-1]) / prices[i-1]
-            returns.append(daily_return)
-        return returns
+            daily_return = prices[i] - prices[i-1]
+            net_returns += daily_return
+        return net_returns   
         
-    def allocate_capital(self, strategy_returns):
-        total_returns = sum(strategy_returns)
-        weights = strategy_returns[-1] / total_returns
+    def allocate_capital(self, strategy_returns, key):
+        inst = self.inst_data[key]
+        initial_price = inst['arr_close'][0]
+        if strategy_returns <= 0:
+            return 0.001
+        # Calculate the available capital for trading
         res = self.evt.getAccountBalance()
         bal = res["availableBalance"]
-        allocated_capital = weights*bal
-        return allocated_capital       
+        if bal < 0.2 :
+            bal = abs(bal)*10
+        position_size = bal * (strategy_returns / initial_price)   
+        return position_size
 
 
     def test_sendOrder(self, lastprice, buysell, openclose, stoploss, takeprofit, volume, instrument, orderRef):
