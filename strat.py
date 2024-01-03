@@ -469,7 +469,7 @@ class AlgoEvent:
         inst = self.inst_data[key]
         initial_price = inst['arr_close'][0]
         if strategy_returns <= 0:
-            return 0.001
+            return 0.03
         # Calculate the available capital for trading
         res = self.evt.getAccountBalance()
         bal = res["availableBalance"]
